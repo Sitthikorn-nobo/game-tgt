@@ -21,18 +21,16 @@
     const { useState, useEffect } = React;
 
     function App() {
-      const [mode, setMode] = useState('start'); // start, admin, judge, results
+      const [mode, setMode] = useState('start');
       const [categories, setCategories] = useState([]);
       const [judges, setJudges] = useState([]);
       const [entries, setEntries] = useState([]);
       const [scores, setScores] = useState([]);
       
-      // Judge mode states
       const [selectedJudge, setSelectedJudge] = useState('');
       const [currentEntryIndex, setCurrentEntryIndex] = useState(0);
       const [currentScore, setCurrentScore] = useState({});
 
-      // Load data
       useEffect(() => {
         loadData();
       }, []);
@@ -69,12 +67,11 @@
         }
       };
 
-      // Initialize default data
       useEffect(() => {
         if (categories.length === 0) {
           setCategories([{
             id: 'cat1',
-            name: 'สิ่งประดิษฐ์ทั่วไป',
+            name: 'การประกวดทั่วไป',
             criteria: [
               { name: 'การนำเสนอ', maxScore: 20 },
               { name: 'ความคิดสร้างสรรค์', maxScore: 20 },
@@ -86,15 +83,21 @@
         }
       }, []);
 
-      // Admin functions
       const addCategory = () => {
         const name = prompt('ชื่อประเภท:');
         if (name) {
           setCategories([...categories, {
             id: `cat${Date.now()}`,
             name,
-            criteria: [{ name: 'หมวดคะแนน 1', maxScore: 100 }]
+            criteria: [{ name: 'หมวดคะแนน 1', maxScore: 10 }]
           }]);
+        }
+      };
+
+      const deleteCategory = (catId) => {
+        if (confirm('ต้องการลบประเภทนี้?')) {
+          setCategories(categories.filter(c => c.id !== catId));
+          setEntries(entries.filter(e => e.categoryId !== catId));
         }
       };
 
@@ -103,7 +106,7 @@
           if (cat.id === catId) {
             return {
               ...cat,
-              criteria: [...cat.criteria, { name: `หมวด ${cat.criteria.length + 1}`, maxScore: 0 }]
+              criteria: [...cat.criteria, { name: `หมวด ${cat.criteria.length + 1}`, maxScore: 10 }]
             };
           }
           return cat;
@@ -140,6 +143,12 @@
         if (name) setJudges([...judges, { id: `j${Date.now()}`, name }]);
       };
 
+      const deleteJudge = (judgeId) => {
+        if (confirm('ต้องการลบกรรมการคนนี้?')) {
+          setJudges(judges.filter(j => j.id !== judgeId));
+        }
+      };
+
       const addEntry = () => {
         const name = prompt('ชื่อผลงาน/ทีม:');
         if (name && categories.length > 0) {
@@ -147,7 +156,13 @@
         }
       };
 
-      // Judge mode functions
+      const deleteEntry = (entryId) => {
+        if (confirm('ต้องการลบผลงานนี้?')) {
+          setEntries(entries.filter(e => e.id !== entryId));
+          setScores(scores.filter(s => s.entryId !== entryId));
+        }
+      };
+
       const startJudging = (judgeId) => {
         setSelectedJudge(judgeId);
         setCurrentEntryIndex(0);
@@ -161,8 +176,11 @@
         const totalMax = category.criteria.reduce((sum, c) => sum + c.maxScore, 0);
         const totalCurrent = Object.values(currentScore).reduce((sum, v) => sum + (parseInt(v) || 0), 0);
 
-        if (totalCurrent !== totalMax) {
-          alert(`⚠️ คะแนนรวมต้องเท่ากับ ${totalMax} คะแนน (ปัจจุบัน: ${totalCurrent})`);
+        // ตรวจสอบว่ากรอกคะแนนครบทุกหมวดหรือไม่
+        const allFilled = category.criteria.every((_, idx) => currentScore[idx] !== undefined && currentScore[idx] !== '');
+        
+        if (!allFilled) {
+          alert('⚠️ กรุณาให้คะแนนให้ครบทุกหมวด');
           return;
         }
 
@@ -177,14 +195,12 @@
         const updatedScores = [...scores, newScore];
         setScores(updatedScores);
         
-        // Auto save after each submission
         try {
           await window.storage.set('scores', JSON.stringify(updatedScores));
         } catch (error) {
           console.error('Save error:', error);
         }
 
-        // Move to next entry
         if (currentEntryIndex < entries.length - 1) {
           setCurrentEntryIndex(currentEntryIndex + 1);
           setCurrentScore({});
@@ -314,11 +330,11 @@
         const totalMax = category.criteria.reduce((sum, c) => sum + c.maxScore, 0);
         const totalCurrent = Object.values(currentScore).reduce((sum, v) => sum + (parseInt(v) || 0), 0);
         const progress = ((currentEntryIndex + 1) / entries.length) * 100;
+        const allFilled = category.criteria.every((_, idx) => currentScore[idx] !== undefined && currentScore[idx] !== '');
 
         return (
           <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
             <div className="max-w-4xl mx-auto">
-              {/* Header */}
               <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
                 <div className="flex justify-between items-center mb-4">
                   <div>
@@ -333,7 +349,6 @@
                   </div>
                 </div>
 
-                {/* Progress Bar */}
                 <div className="w-full bg-gray-200 rounded-full h-3">
                   <div
                     className="bg-gradient-to-r from-blue-500 to-indigo-600 h-3 rounded-full transition-all duration-500"
@@ -342,7 +357,6 @@
                 </div>
               </div>
 
-              {/* Entry Info */}
               <div className="bg-gradient-to-br from-purple-500 to-indigo-600 rounded-2xl shadow-xl p-8 mb-6 text-white">
                 <div className="text-center">
                   <div className="text-5xl mb-4">🎨</div>
@@ -351,7 +365,6 @@
                 </div>
               </div>
 
-              {/* Scoring Form */}
               <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
                 <h3 className="text-2xl font-bold text-gray-800 mb-6 text-center">
                   ให้คะแนนแต่ละหมวด
@@ -389,9 +402,8 @@
                   ))}
                 </div>
 
-                {/* Total Score Display */}
                 <div className={`mt-8 p-6 rounded-2xl text-center transition-all ${
-                  totalCurrent === totalMax 
+                  allFilled
                     ? 'bg-gradient-to-r from-green-400 to-emerald-500 text-white shadow-lg' 
                     : 'bg-gradient-to-r from-yellow-100 to-orange-100 border-2 border-yellow-400'
                 }`}>
@@ -399,22 +411,21 @@
                   <div className="text-5xl font-bold mb-2">
                     {totalCurrent} / {totalMax}
                   </div>
-                  {totalCurrent !== totalMax && (
+                  {!allFilled && (
                     <p className="text-red-600 font-semibold text-sm">
-                      ⚠️ ต้องให้ครบ {totalMax} คะแนน
+                      ⚠️ กรุณาให้คะแนนครบทุกหมวด
                     </p>
                   )}
-                  {totalCurrent === totalMax && (
+                  {allFilled && (
                     <p className="text-sm font-semibold">✅ พร้อมบันทึกคะแนน</p>
                   )}
                 </div>
 
-                {/* Next Button */}
                 <button
                   onClick={submitCurrentScore}
-                  disabled={totalCurrent !== totalMax}
+                  disabled={!allFilled}
                   className={`w-full mt-6 py-5 rounded-xl text-xl font-bold transition-all transform ${
-                    totalCurrent === totalMax
+                    allFilled
                       ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-600 hover:to-emerald-700 shadow-xl hover:shadow-2xl hover:-translate-y-1'
                       : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                   }`}
@@ -483,11 +494,17 @@
                       <div key={cat.id} className="bg-white p-6 rounded-xl mb-4 shadow">
                         <div className="flex justify-between items-center mb-4">
                           <h3 className="font-bold text-xl">{cat.name}</h3>
-                          <span className={`px-4 py-2 rounded-full text-sm font-bold ${
-                            getTotalScore(cat.id) === 100 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                          }`}>
-                            รวม: {getTotalScore(cat.id)}/100
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="px-4 py-2 rounded-full text-sm font-bold bg-blue-100 text-blue-800">
+                              รวม: {getTotalScore(cat.id)} คะแนน
+                            </span>
+                            <button
+                              onClick={() => deleteCategory(cat.id)}
+                              className="bg-red-500 text-white px-3 py-2 rounded-lg hover:bg-red-600 font-semibold text-sm"
+                            >
+                              ลบประเภท
+                            </button>
+                          </div>
                         </div>
 
                         {cat.criteria.map((crit, idx) => (
@@ -539,7 +556,7 @@
                           <div key={judge.id} className="bg-white p-4 rounded-lg flex justify-between items-center shadow">
                             <span className="font-semibold text-lg">{idx + 1}. {judge.name}</span>
                             <button
-                              onClick={() => setJudges(judges.filter(j => j.id !== judge.id))}
+                              onClick={() => deleteJudge(judge.id)}
                               className="text-red-600 hover:text-red-800 font-semibold"
                             >
                               ลบ
@@ -564,7 +581,7 @@
                               <div className="flex justify-between items-center mb-2">
                                 <span className="font-semibold text-lg">{idx + 1}. {entry.name}</span>
                                 <button
-                                  onClick={() => setEntries(entries.filter(e => e.id !== entry.id))}
+                                  onClick={() => deleteEntry(entry.id)}
                                   className="text-red-600 hover:text-red-800 font-semibold"
                                 >
                                   ลบ
@@ -590,7 +607,6 @@
                     </div>
                   </div>
 
-                  {/* Save Button */}
                   <button
                     onClick={saveData}
                     className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-5 rounded-xl text-xl font-bold hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg hover:shadow-xl"
@@ -671,7 +687,6 @@
                                 </div>
                               </div>
 
-                              {/* Score Details */}
                               {result.details.length > 0 && (
                                 <div className="mt-4 space-y-3">
                                   <p className={`font-semibold ${idx < 3 ? 'text-white opacity-90' : 'text-gray-700'}`}>
