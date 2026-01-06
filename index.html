@@ -90,13 +90,14 @@
           setCategories([{
             id: 'cat1',
             name: 'สิ่งประดิษฐ์ทั่วไป',
-            criteria: [
-              { name: 'การนำเสนอ', maxScore: 20 },
-              { name: 'ความคิดสร้างสรรค์', maxScore: 20 },
-              { name: 'ความสวยงาม', maxScore: 20 },
-              { name: 'ความเป็นประโยชน์', maxScore: 20 },
-              { name: 'ฝีมือและเทคนิค', maxScore: 20 }
-            ]
+           criteria: [
+  { id: `crit_${Date.now()}_1`, name: 'การนำเสนอ', maxScore: 20 },
+  { id: `crit_${Date.now()}_2`, name: 'ความคิดสร้างสรรค์', maxScore: 20 },
+  { id: `crit_${Date.now()}_3`, name: 'ความสวยงาม', maxScore: 20 },
+  { id: `crit_${Date.now()}_4`, name: 'ความเป็นประโยชน์', maxScore: 20 },
+  { id: `crit_${Date.now()}_5`, name: 'ฝีมือและเทคนิค', maxScore: 20 }
+]
+
           }]);
         }
       }, []);
@@ -108,7 +109,8 @@
           setCategories([...categories, {
             id: `cat${Date.now()}`,
             name,
-            criteria: [{ name: 'หมวดคะแนน 1', maxScore: 100 }]
+            criteria: [...cat.criteria, { id: `crit_${Date.now()}`, name: `หมวด ${cat.criteria.length + 1}`, maxScore: 0 }]
+
           }]);
         }
       };
@@ -414,14 +416,10 @@
                   <div className="text-5xl font-bold mb-2">
                     {totalCurrent} / {totalMax}
                   </div>
-                  {totalCurrent !== totalMax && (
-                    <p className="text-red-600 font-semibold text-sm">
-                      ⚠️ ต้องให้ครบ {totalMax} คะแนน
-                    </p>
-                  )}
-                  {totalCurrent === totalMax && (
-                    <p className="text-sm font-semibold">✅ พร้อมบันทึกคะแนน</p>
-                  )}
+                  <p className="text-sm font-semibold">
+  ✅ กดบันทึกได้เลย (ไม่จำเป็นต้องครบ {totalMax})
+</p>
+
                 </div>
 
                 {/* Next Button */}
@@ -506,7 +504,8 @@
                         </div>
 
                         {cat.criteria.map((crit, idx) => (
-                          <div key={idx} className="flex gap-2 mb-3">
+                            <div key={crit.id || idx} className="flex gap-2 mb-3">
+
                             <input
                               type="text"
                               value={crit.name}
@@ -747,4 +746,5 @@
   </script>
 </body>
 </html>
+
 
