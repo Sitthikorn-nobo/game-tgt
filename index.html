@@ -120,7 +120,8 @@
           if (cat.id === catId) {
             return {
               ...cat,
-              criteria: [...cat.criteria, { name: `หมวด ${cat.criteria.length + 1}`, maxScore: 0 }]
+              criteria: [{ id: `crit_${Date.now()}`, name: 'หมวดคะแนน 1', maxScore: 100 }]
+
             };
           }
           return cat;
@@ -743,6 +744,7 @@
   </script>
 </body>
 </html>
+
 
 
 
