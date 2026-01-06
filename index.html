@@ -447,12 +447,13 @@
                 </div>
 
                 {/* Next Button (ไม่ล็อกแล้ว) */}
-                <button
-                  onClick={submitCurrentScore}
-                  className="w-full mt-6 py-5 rounded-xl text-xl font-bold transition-all transform bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-600 hover:to-emerald-700 shadow-xl hover:shadow-2xl hover:-translate-y-1"
+               <button
+              onClick={submitCurrentScore}
+                className="w-full mt-6 py-5 rounded-xl text-xl font-bold transition-all transform bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-600 hover:to-emerald-700 shadow-xl hover:shadow-2xl hover:-translate-y-1"
                 >
-                  {currentEntryIndex < entries.length - 1 ? '➡️ ถัดไป' : '✅ เสร็จสิ้น'}
+              {currentEntryIndex < entries.length - 1 ? '➡️ ถัดไป' : '✅ เสร็จสิ้น'}
                 </button>
+
               </div>
             </div>
           </div>
@@ -763,3 +764,4 @@
   </script>
 </body>
 </html>
+
