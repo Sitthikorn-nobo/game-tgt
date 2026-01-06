@@ -16,7 +16,23 @@
 </head>
 <body>
   <div id="root"></div>
-  
+  <script>
+  // ✅ Polyfill ให้ window.storage ใช้งานได้บน GitHub Pages ด้วย localStorage
+  // (ไม่เปลี่ยน logic เดิมของคุณ แค่ทำให้ get/set มีจริง)
+  window.storage = {
+    get: (key) => {
+      const value = localStorage.getItem(key);
+      // ให้คืนรูปแบบเดียวกับที่โค้ดเดิมคาดหวัง: { value: "..." }
+      return Promise.resolve(value === null ? null : { value });
+    },
+    set: (key, value) => {
+      // โค้ดเดิมส่งเป็น string (JSON.stringify) อยู่แล้ว
+      localStorage.setItem(key, value);
+      return Promise.resolve(true);
+    }
+  };
+</script>
+
   <script type="text/babel">
     const { useState, useEffect } = React;
 
@@ -36,22 +52,23 @@
       }, []);
 
       const loadData = async () => {
-        try {
-          const [catResult, judgeResult, entryResult, scoreResult] = await Promise.all([
-            window.storage.get('categories').catch(() => null),
-            window.storage.get('judges').catch(() => null),
-            window.storage.get('entries').catch(() => null),
-            window.storage.get('scores').catch(() => null)
-          ]);
+  try {
+    const [catResult, judgeResult, entryResult, scoreResult] = await Promise.all([
+      window.storage.get('categories').catch(() => null),
+      window.storage.get('judges').catch(() => null),
+      window.storage.get('entries').catch(() => null),
+      window.storage.get('scores').catch(() => null)
+    ]);
 
-          if (catResult) setCategories(JSON.parse(catResult.value));
-          if (judgeResult) setJudges(JSON.parse(judgeResult.value));
-          if (entryResult) setEntries(JSON.parse(entryResult.value));
-          if (scoreResult) setScores(JSON.parse(scoreResult.value));
-        } catch (error) {
-          console.log('Loading default data');
-        }
-      };
+    if (catResult?.value) setCategories(JSON.parse(catResult.value));
+    if (judgeResult?.value) setJudges(JSON.parse(judgeResult.value));
+    if (entryResult?.value) setEntries(JSON.parse(entryResult.value));
+    if (scoreResult?.value) setScores(JSON.parse(scoreResult.value));
+  } catch (error) {
+    console.log('Loading default data', error);
+  }
+};
+
 
       const saveData = async () => {
         try {
@@ -72,12 +89,12 @@
           setCategories([{
             id: 'cat1',
             name: 'การประกวดทั่วไป',
-            criteria: [
-              { name: 'การนำเสนอ', maxScore: 20 },
-              { name: 'ความคิดสร้างสรรค์', maxScore: 20 },
-              { name: 'ความสวยงาม', maxScore: 20 },
-              { name: 'ความเป็นประโยชน์', maxScore: 20 },
-              { name: 'ฝีมือและเทคนิค', maxScore: 20 }
+            criteria: [           
+            { id: `crit_${Date.now()}_1`, name: 'การนำเสนอ', maxScore: 20 },
+            { id: `crit_${Date.now()}_2`, name: 'ความคิดสร้างสรรค์', maxScore: 20 },
+            { id: `crit_${Date.now()}_3`, name: 'ความสวยงาม', maxScore: 20 },
+            { id: `crit_${Date.now()}_4`, name: 'ความเป็นประโยชน์', maxScore: 20 },
+            { id: `crit_${Date.now()}_5`, name: 'ฝีมือและเทคนิค', maxScore: 20 }
             ]
           }]);
         }
@@ -89,7 +106,8 @@
           setCategories([...categories, {
             id: `cat${Date.now()}`,
             name,
-            criteria: [{ name: 'หมวดคะแนน 1', maxScore: 10 }]
+            criteria: [{ id: `crit_${Date.now()}`, name: 'หมวดคะแนน 1', maxScore: 100 }]
+
           }]);
         }
       };
@@ -106,7 +124,7 @@
           if (cat.id === catId) {
             return {
               ...cat,
-              criteria: [...cat.criteria, { name: `หมวด ${cat.criteria.length + 1}`, maxScore: 10 }]
+              criteria: [...cat.criteria, { id: `crit_${Date.now()}`, name: `หมวด ${cat.criteria.length + 1}`, maxScore: 0 }]
             };
           }
           return cat;
@@ -747,3 +765,4 @@
   </script>
 </body>
 </html>
+
