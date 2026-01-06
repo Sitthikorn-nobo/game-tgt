@@ -178,10 +178,7 @@
         const totalMax = category.criteria.reduce((sum, c) => sum + c.maxScore, 0);
         const totalCurrent = Object.values(currentScore).reduce((sum, v) => sum + (parseInt(v) || 0), 0);
 
-        if (totalCurrent !== totalMax) {
-          alert(`⚠️ คะแนนรวมต้องเท่ากับ ${totalMax} คะแนน (ปัจจุบัน: ${totalCurrent})`);
-          return;
-        }
+       
 
         const newScore = {
           id: `s${Date.now()}`,
@@ -746,5 +743,6 @@
   </script>
 </body>
 </html>
+
 
 
