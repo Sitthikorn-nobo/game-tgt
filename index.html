@@ -16,24 +16,21 @@
 </head>
 <body>
   <div id="root"></div>
-  <script>
-  // ✅ Polyfill ให้ window.storage ใช้งานได้บน GitHub Pages ด้วย localStorage
-  // (ไม่เปลี่ยน logic เดิมของคุณ แค่ทำให้ get/set มีจริง)
-  window.storage = {
-    get: (key) => {
-      const value = localStorage.getItem(key);
-      // ให้คืนรูปแบบเดียวกับที่โค้ดเดิมคาดหวัง: { value: "..." }
-      return Promise.resolve(value === null ? null : { value });
-    },
-    set: (key, value) => {
-      // โค้ดเดิมส่งเป็น string (JSON.stringify) อยู่แล้ว
-      localStorage.setItem(key, value);
-      return Promise.resolve(true);
-    }
-  };
-</script>
 
-  
+  <script>
+    // ✅ Polyfill ให้ window.storage ใช้งานได้บน GitHub Pages ด้วย localStorage
+    window.storage = {
+      get: (key) => {
+        const value = localStorage.getItem(key);
+        return Promise.resolve(value === null ? null : { value });
+      },
+      set: (key, value) => {
+        localStorage.setItem(key, value);
+        return Promise.resolve(true);
+      }
+    };
+  </script>
+
   <script type="text/babel">
     const { useState, useEffect } = React;
 
@@ -43,34 +40,34 @@
       const [judges, setJudges] = useState([]);
       const [entries, setEntries] = useState([]);
       const [scores, setScores] = useState([]);
-      
+
       // Judge mode states
       const [selectedJudge, setSelectedJudge] = useState('');
       const [currentEntryIndex, setCurrentEntryIndex] = useState(0);
       const [currentScore, setCurrentScore] = useState({});
 
-      // Load data
+      // Load data once
       useEffect(() => {
         loadData();
       }, []);
 
       const loadData = async () => {
-  try {
-    const [catResult, judgeResult, entryResult, scoreResult] = await Promise.all([
-      window.storage.get('categories').catch(() => null),
-      window.storage.get('judges').catch(() => null),
-      window.storage.get('entries').catch(() => null),
-      window.storage.get('scores').catch(() => null)
-    ]);
+        try {
+          const [catResult, judgeResult, entryResult, scoreResult] = await Promise.all([
+            window.storage.get('categories').catch(() => null),
+            window.storage.get('judges').catch(() => null),
+            window.storage.get('entries').catch(() => null),
+            window.storage.get('scores').catch(() => null)
+          ]);
 
-    if (catResult?.value) setCategories(JSON.parse(catResult.value));
-    if (judgeResult?.value) setJudges(JSON.parse(judgeResult.value));
-    if (entryResult?.value) setEntries(JSON.parse(entryResult.value));
-    if (scoreResult?.value) setScores(JSON.parse(scoreResult.value));
-  } catch (error) {
-    console.log('Loading default data', error);
-  }
-};
+          if (catResult?.value) setCategories(JSON.parse(catResult.value));
+          if (judgeResult?.value) setJudges(JSON.parse(judgeResult.value));
+          if (entryResult?.value) setEntries(JSON.parse(entryResult.value));
+          if (scoreResult?.value) setScores(JSON.parse(scoreResult.value));
+        } catch (error) {
+          console.log('Loading default data', error);
+        }
+      };
 
       const saveData = async () => {
         try {
@@ -86,24 +83,36 @@
         }
       };
 
+      // ✅ เติม id ให้ criteria ที่ข้อมูลเก่าไม่มี id (กัน key เพี้ยน + ลบแล้วค้าง)
+      useEffect(() => {
+        if (!categories || categories.length === 0) return;
+
+        const needFix = categories.some(cat => (cat.criteria || []).some(c => !c.id));
+        if (!needFix) return;
+
+        setCategories(prev => prev.map(cat => ({
+          ...cat,
+          criteria: (cat.criteria || []).map(c => c.id ? c : ({ ...c, id: `crit_${Date.now()}_${Math.random()}` }))
+        })));
+      }, [categories]);
+
       // Initialize default data
       useEffect(() => {
         if (categories.length === 0) {
+          const base = Date.now();
           setCategories([{
             id: 'cat1',
             name: 'สิ่งประดิษฐ์ทั่วไป',
-            criteria: 
-  { id: `crit_${Date.now()}_1`, name: 'การนำเสนอ', maxScore: 20 },
-  { id: `crit_${Date.now()}_2`, name: 'ความคิดสร้างสรรค์', maxScore: 20 },
-  { id: `crit_${Date.now()}_3`, name: 'ความสวยงาม', maxScore: 20 },
-  { id: `crit_${Date.now()}_4`, name: 'ความเป็นประโยชน์', maxScore: 20 },
-  { id: `crit_${Date.now()}_5`, name: 'ฝีมือและเทคนิค', maxScore: 20 }
-]
-
+            criteria: [
+              { id: `crit_${base}_1`, name: 'การนำเสนอ', maxScore: 20 },
+              { id: `crit_${base}_2`, name: 'ความคิดสร้างสรรค์', maxScore: 20 },
+              { id: `crit_${base}_3`, name: 'ความสวยงาม', maxScore: 20 },
+              { id: `crit_${base}_4`, name: 'ความเป็นประโยชน์', maxScore: 20 },
+              { id: `crit_${base}_5`, name: 'ฝีมือและเทคนิค', maxScore: 20 }
             ]
           }]);
         }
-      }, []);
+      }, []); // ตั้งค่าเริ่มต้นครั้งเดียว
 
       // Admin functions
       const addCategory = () => {
@@ -113,7 +122,6 @@
             id: `cat${Date.now()}`,
             name,
             criteria: [{ id: `crit_${Date.now()}`, name: 'หมวดคะแนน 1', maxScore: 100 }]
-
           }]);
         }
       };
@@ -124,7 +132,6 @@
             return {
               ...cat,
               criteria: [...cat.criteria, { id: `crit_${Date.now()}`, name: `หมวด ${cat.criteria.length + 1}`, maxScore: 0 }]
-
             };
           }
           return cat;
@@ -135,7 +142,10 @@
         setCategories(categories.map(cat => {
           if (cat.id === catId) {
             const newCriteria = [...cat.criteria];
-            newCriteria[index] = { ...newCriteria[index], [field]: field === 'maxScore' ? parseInt(value) || 0 : value };
+            newCriteria[index] = {
+              ...newCriteria[index],
+              [field]: field === 'maxScore' ? (parseInt(value) || 0) : value
+            };
             return { ...cat, criteria: newCriteria };
           }
           return cat;
@@ -178,11 +188,12 @@
 
       const submitCurrentScore = async () => {
         const entry = entries[currentEntryIndex];
-        const category = categories.find(c => c.id === entry.categoryId);
-        const totalMax = category.criteria.reduce((sum, c) => sum + c.maxScore, 0);
-        const totalCurrent = Object.values(currentScore).reduce((sum, v) => sum + (parseInt(v) || 0), 0);
-        }
+        if (!entry) return;
 
+        const category = categories.find(c => c.id === entry.categoryId);
+        if (!category) return;
+
+        // ✅ ไม่บังคับว่าต้องครบ totalMax แล้วถึง submit (ตามที่คุณต้องการ)
         const newScore = {
           id: `s${Date.now()}`,
           judgeId: selectedJudge,
@@ -193,7 +204,7 @@
 
         const updatedScores = [...scores, newScore];
         setScores(updatedScores);
-        
+
         // Auto save after each submission
         try {
           await window.storage.set('scores', JSON.stringify(updatedScores));
@@ -213,7 +224,7 @@
 
       const getEntryResults = (categoryId) => {
         const categoryEntries = entries.filter(e => e.categoryId === categoryId);
-        
+
         return categoryEntries.map(entry => {
           const entryScores = scores.filter(s => s.entryId === entry.id);
           const avgScore = entryScores.length > 0
@@ -294,7 +305,7 @@
                 ))}
               </div>
 
-              {judges.length === 0 && (
+              {judges.length === 0###     && (
                 <div className="text-center text-gray-500 mt-8">
                   <p>ยังไม่มีกรรมการในระบบ</p>
                   <p className="text-sm">กรุณาติดต่อผู้ดูแลระบบ</p>
@@ -328,9 +339,27 @@
 
         const category = categories.find(c => c.id === entry.categoryId);
         const judge = judges.find(j => j.id === selectedJudge);
+
+        if (!category) {
+          return (
+            <div className="min-h-screen bg-gradient-to-br from-red-400 to-pink-600 flex items-center justify-center p-4">
+              <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full text-center">
+                <div className="text-6xl mb-4">⚠️</div>
+                <h2 className="text-2xl font-bold text-gray-800 mb-4">ไม่พบประเภท</h2>
+                <button
+                  onClick={() => setMode('start')}
+                  className="bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700"
+                >
+                  กลับหน้าหลัก
+                </button>
+              </div>
+            </div>
+          );
+        }
+
         const totalMax = category.criteria.reduce((sum, c) => sum + c.maxScore, 0);
         const totalCurrent = Object.values(currentScore).reduce((sum, v) => sum + (parseInt(v) || 0), 0);
-        const progress = ((currentEntryIndex + 1) / entries.length) * 100;
+        const progress = entries.length > 0 ? ((currentEntryIndex + 1) / entries.length) * 100 : 0;
 
         return (
           <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
@@ -376,7 +405,7 @@
 
                 <div className="space-y-6">
                   {category.criteria.map((crit, idx) => (
-                    <div key={idx} className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-xl">
+                    <div key={crit.id || idx} className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-xl">
                       <div className="flex justify-between items-center mb-4">
                         <label className="font-bold text-gray-800 text-lg">{crit.name}</label>
                         <div className="flex items-center gap-3">
@@ -407,30 +436,20 @@
                 </div>
 
                 {/* Total Score Display */}
-                <div className={`mt-8 p-6 rounded-2xl text-center transition-all ${
-                  totalCurrent === totalMax 
-                    ? 'bg-gradient-to-r from-green-400 to-emerald-500 text-white shadow-lg' 
-                    : 'bg-gradient-to-r from-yellow-100 to-orange-100 border-2 border-yellow-400'
-                }`}>
+                <div className="mt-8 p-6 rounded-2xl text-center transition-all bg-gradient-to-r from-yellow-100 to-orange-100 border-2 border-yellow-400">
                   <p className="text-sm font-semibold mb-2 opacity-80">คะแนนรวม</p>
                   <div className="text-5xl font-bold mb-2">
                     {totalCurrent} / {totalMax}
                   </div>
-                 <p className="text-sm font-semibold">
-                    กดบันทึกได้เลย (ไม่จำเป็นต้องครบ {totalMax})
-                </p>
-
+                  <p className="text-sm font-semibold">
+                    ✅ กดบันทึกได้เลย (ไม่จำเป็นต้องครบ {totalMax})
+                  </p>
                 </div>
 
-                {/* Next Button */}
+                {/* Next Button (ไม่ล็อกแล้ว) */}
                 <button
                   onClick={submitCurrentScore}
-                  disabled={totalCurrent !== totalMax}
-                  className={`w-full mt-6 py-5 rounded-xl text-xl font-bold transition-all transform ${
-                    totalCurrent === totalMax
-                      ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-600 hover:to-emerald-700 shadow-xl hover:shadow-2xl hover:-translate-y-1'
-                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  }`}
+                  className="w-full mt-6 py-5 rounded-xl text-xl font-bold transition-all transform bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-600 hover:to-emerald-700 shadow-xl hover:shadow-2xl hover:-translate-y-1"
                 >
                   {currentEntryIndex < entries.length - 1 ? '➡️ ถัดไป' : '✅ เสร็จสิ้น'}
                 </button>
@@ -491,7 +510,7 @@
                         + เพิ่มประเภท
                       </button>
                     </div>
-                    
+
                     {categories.map(cat => (
                       <div key={cat.id} className="bg-white p-6 rounded-xl mb-4 shadow">
                         <div className="flex justify-between items-center mb-4">
@@ -505,7 +524,6 @@
 
                         {cat.criteria.map((crit, idx) => (
                           <div key={crit.id || idx} className="flex gap-2 mb-3">
-
                             <input
                               type="text"
                               value={crit.name}
@@ -572,7 +590,6 @@
                       </div>
                       <div className="space-y-2">
                         {entries.map((entry, idx) => {
-                          const cat = categories.find(c => c.id === entry.categoryId);
                           return (
                             <div key={entry.id} className="bg-white p-4 rounded-lg shadow">
                               <div className="flex justify-between items-center mb-2">
@@ -587,8 +604,8 @@
                               <select
                                 value={entry.categoryId}
                                 onChange={(e) => {
-                                  setEntries(entries.map(e => 
-                                    e.id === entry.id ? { ...e, categoryId: e.target.value } : e
+                                  setEntries(entries.map(e2 =>
+                                    e2.id === entry.id ? { ...e2, categoryId: e.target.value } : e2
                                   ));
                                 }}
                                 className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:outline-none"
@@ -618,7 +635,7 @@
         );
       }
 
-      // RESULTS MODE
+      // RESULTS MODE (เหมือนเดิมตามที่คุณมี)
       if (mode === 'results') {
         return (
           <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-50 p-4">
@@ -685,7 +702,6 @@
                                 </div>
                               </div>
 
-                              {/* Score Details */}
                               {result.details.length > 0 && (
                                 <div className="mt-4 space-y-3">
                                   <p className={`font-semibold ${idx < 3 ? 'text-white opacity-90' : 'text-gray-700'}`}>
@@ -742,10 +758,8 @@
       return null;
     }
 
+    // ใช้ render แบบเดิมได้ (CDN)
     ReactDOM.render(<App />, document.getElementById('root'));
   </script>
 </body>
-
 </html>
-
-
