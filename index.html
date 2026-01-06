@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ระบบให้คะแนนการประกวด</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    .slider-thumb::-webkit-slider-thumb { appearance: none; width: 24px; height: 24px; background: #3b82f6; border-radius: 50%; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.3); }
+    .slider-thumb::-moz-range-thumb { width: 24px; height: 24px; background: #3b82f6; border-radius: 50%; cursor: pointer; border: none; box-shadow: 0 2px 6px rgba(0,0,0,0.3); }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    function App() {
+      const [mode, setMode] = useState('start'); // start, admin, judge, results
+      const [categories, setCategories] = useState([]);
+      const [judges, setJudges] = useState([]);
+      const [entries, setEntries] = useState([]);
+      const [scores, setScores] = useState([]);
+      
+      // Judge mode states
+      const [selectedJudge, setSelectedJudge] = useState('');
+      const [currentEntryIndex, setCurrentEntryIndex] = useState(0);
+      const [currentScore, setCurrentScore] = useState({});
+
+      // Load data
+      useEffect(() => {
+        loadData();
+      }, []);
+
+      const loadData = async () => {
+        try {
+          const [catResult, judgeResult, entryResult, scoreResult] = await Promise.all([
+            window.storage.get('categories').catch(() => null),
+            window.storage.get('judges').catch(() => null),
+            window.storage.get('entries').catch(() => null),
+            window.storage.get('scores').catch(() => null)
+          ]);
+
+          if (catResult) setCategories(JSON.parse(catResult.value));
+          if (judgeResult) setJudges(JSON.parse(judgeResult.value));
+          if (entryResult) setEntries(JSON.parse(entryResult.value));
+          if (scoreResult) setScores(JSON.parse(scoreResult.value));
+        } catch (error) {
+          console.log('Loading default data');
+        }
+      };
+
+      const saveData = async () => {
+        try {
+          await Promise.all([
+            window.storage.set('categories', JSON.stringify(categories)),
+            window.storage.set('judges', JSON.stringify(judges)),
+            window.storage.set('entries', JSON.stringify(entries)),
+            window.storage.set('scores', JSON.stringify(scores))
+          ]);
+          alert('✅ บันทึกข้อมูลสำเร็จ!');
+        } catch (error) {
+          alert('❌ เกิดข้อผิดพลาดในการบันทึก');
+        }
+      };
+
+      // Initialize default data
+      useEffect(() => {
+        if (categories.length === 0) {
+          setCategories([{
+            id: 'cat1',
+            name: 'สิ่งประดิษฐ์ทั่วไป',
+            criteria: [
+              { name: 'การนำเสนอ', maxScore: 20 },
+              { name: 'ความคิดสร้างสรรค์', maxScore: 20 },
+              { name: 'ความสวยงาม', maxScore: 20 },
+              { name: 'ความเป็นประโยชน์', maxScore: 20 },
+              { name: 'ฝีมือและเทคนิค', maxScore: 20 }
+            ]
+          }]);
+        }
+      }, []);
+
+      // Admin functions
+      const addCategory = () => {
+        const name = prompt('ชื่อประเภท:');
+        if (name) {
+          setCategories([...categories, {
+            id: `cat${Date.now()}`,
+            name,
+            criteria: [{ name: 'หมวดคะแนน 1', maxScore: 100 }]
+          }]);
+        }
+      };
+
+      const addCriteria = (catId) => {
+        setCategories(categories.map(cat => {
+          if (cat.id === catId) {
+            return {
+              ...cat,
+              criteria: [...cat.criteria, { name: `หมวด ${cat.criteria.length + 1}`, maxScore: 0 }]
+            };
+          }
+          return cat;
+        }));
+      };
+
+      const updateCriteria = (catId, index, field, value) => {
+        setCategories(categories.map(cat => {
+          if (cat.id === catId) {
+            const newCriteria = [...cat.criteria];
+            newCriteria[index] = { ...newCriteria[index], [field]: field === 'maxScore' ? parseInt(value) || 0 : value };
+            return { ...cat, criteria: newCriteria };
+          }
+          return cat;
+        }));
+      };
+
+      const deleteCriteria = (catId, index) => {
+        setCategories(categories.map(cat => {
+          if (cat.id === catId) {
+            return { ...cat, criteria: cat.criteria.filter((_, i) => i !== index) };
+          }
+          return cat;
+        }));
+      };
+
+      const getTotalScore = (catId) => {
+        const cat = categories.find(c => c.id === catId);
+        return cat ? cat.criteria.reduce((sum, c) => sum + c.maxScore, 0) : 0;
+      };
+
+      const addJudge = () => {
+        const name = prompt('ชื่อกรรมการ:');
+        if (name) setJudges([...judges, { id: `j${Date.now()}`, name }]);
+      };
+
+      const addEntry = () => {
+        const name = prompt('ชื่อผลงาน/ทีม:');
+        if (name && categories.length > 0) {
+          setEntries([...entries, { id: `e${Date.now()}`, name, categoryId: categories[0].id }]);
+        }
+      };
+
+      // Judge mode functions
+      const startJudging = (judgeId) => {
+        setSelectedJudge(judgeId);
+        setCurrentEntryIndex(0);
+        setCurrentScore({});
+        setMode('scoring');
+      };
+
+      const submitCurrentScore = async () => {
+        const entry = entries[currentEntryIndex];
+        const category = categories.find(c => c.id === entry.categoryId);
+        const totalMax = category.criteria.reduce((sum, c) => sum + c.maxScore, 0);
+        const totalCurrent = Object.values(currentScore).reduce((sum, v) => sum + (parseInt(v) || 0), 0);
+
+        if (totalCurrent !== totalMax) {
+          alert(`⚠️ คะแนนรวมต้องเท่ากับ ${totalMax} คะแนน (ปัจจุบัน: ${totalCurrent})`);
+          return;
+        }
+
+        const newScore = {
+          id: `s${Date.now()}`,
+          judgeId: selectedJudge,
+          entryId: entry.id,
+          scores: { ...currentScore },
+          timestamp: new Date().toISOString()
+        };
+
+        const updatedScores = [...scores, newScore];
+        setScores(updatedScores);
+        
+        // Auto save after each submission
+        try {
+          await window.storage.set('scores', JSON.stringify(updatedScores));
+        } catch (error) {
+          console.error('Save error:', error);
+        }
+
+        // Move to next entry
+        if (currentEntryIndex < entries.length - 1) {
+          setCurrentEntryIndex(currentEntryIndex + 1);
+          setCurrentScore({});
+        } else {
+          alert('🎉 ให้คะแนนเสร็จสิ้น! ขอบคุณครับ');
+          setMode('complete');
+        }
+      };
+
+      const getEntryResults = (categoryId) => {
+        const categoryEntries = entries.filter(e => e.categoryId === categoryId);
+        
+        return categoryEntries.map(entry => {
+          const entryScores = scores.filter(s => s.entryId === entry.id);
+          const avgScore = entryScores.length > 0
+            ? entryScores.reduce((sum, s) => {
+                return sum + Object.values(s.scores).reduce((a, b) => a + (parseInt(b) || 0), 0);
+              }, 0) / entryScores.length
+            : 0;
+
+          return { entry, avgScore, scoreCount: entryScores.length, details: entryScores };
+        }).sort((a, b) => b.avgScore - a.avgScore);
+      };
+
+      // START SCREEN
+      if (mode === 'start') {
+        return (
+          <div className="min-h-screen bg-gradient-to-br from-purple-600 via-blue-600 to-indigo-700 flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full">
+              <div className="text-center mb-8">
+                <div className="text-6xl mb-4">🏆</div>
+                <h1 className="text-3xl font-bold text-gray-800 mb-2">ระบบให้คะแนนการประกวด</h1>
+                <p className="text-gray-600">เลือกโหมดที่ต้องการ</p>
+              </div>
+
+              <div className="space-y-4">
+                <button
+                  onClick={() => setMode('judge')}
+                  className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-4 rounded-xl font-bold text-lg hover:from-green-600 hover:to-emerald-700 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-1"
+                >
+                  👨‍⚖️ กรรมการให้คะแนน
+                </button>
+
+                <button
+                  onClick={() => setMode('admin')}
+                  className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white py-4 rounded-xl font-bold text-lg hover:from-blue-600 hover:to-indigo-700 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-1"
+                >
+                  ⚙️ ผู้ดูแลระบบ
+                </button>
+
+                <button
+                  onClick={() => setMode('results')}
+                  className="w-full bg-gradient-to-r from-purple-500 to-pink-600 text-white py-4 rounded-xl font-bold text-lg hover:from-purple-600 hover:to-pink-700 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-1"
+                >
+                  📊 ดูผลการแข่งขัน
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      // JUDGE SELECT SCREEN
+      if (mode === 'judge') {
+        return (
+          <div className="min-h-screen bg-gradient-to-br from-green-400 via-blue-500 to-purple-600 flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full">
+              <button
+                onClick={() => setMode('start')}
+                className="mb-6 text-gray-600 hover:text-gray-800 flex items-center gap-2"
+              >
+                ← กลับ
+              </button>
+
+              <div className="text-center mb-8">
+                <div className="text-6xl mb-4">👨‍⚖️</div>
+                <h2 className="text-3xl font-bold text-gray-800 mb-2">เลือกชื่อกรรมการ</h2>
+                <p className="text-gray-600">คุณคือใคร?</p>
+              </div>
+
+              <div className="space-y-3">
+                {judges.map(judge => (
+                  <button
+                    key={judge.id}
+                    onClick={() => startJudging(judge.id)}
+                    className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white py-4 rounded-xl font-bold text-lg hover:from-blue-600 hover:to-indigo-700 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-1"
+                  >
+                    {judge.name}
+                  </button>
+                ))}
+              </div>
+
+              {judges.length === 0 && (
+                <div className="text-center text-gray-500 mt-8">
+                  <p>ยังไม่มีกรรมการในระบบ</p>
+                  <p className="text-sm">กรุณาติดต่อผู้ดูแลระบบ</p>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      }
+
+      // SCORING SCREEN
+      if (mode === 'scoring') {
+        const entry = entries[currentEntryIndex];
+        if (!entry) {
+          return (
+            <div className="min-h-screen bg-gradient-to-br from-red-400 to-pink-600 flex items-center justify-center p-4">
+              <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full text-center">
+                <div className="text-6xl mb-4">⚠️</div>
+                <h2 className="text-2xl font-bold text-gray-800 mb-4">ไม่พบผลงาน</h2>
+                <p className="text-gray-600 mb-6">กรุณาติดต่อผู้ดูแลระบบ</p>
+                <button
+                  onClick={() => setMode('start')}
+                  className="bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700"
+                >
+                  กลับหน้าหลัก
+                </button>
+              </div>
+            </div>
+          );
+        }
+
+        const category = categories.find(c => c.id === entry.categoryId);
+        const judge = judges.find(j => j.id === selectedJudge);
+        const totalMax = category.criteria.reduce((sum, c) => sum + c.maxScore, 0);
+        const totalCurrent = Object.values(currentScore).reduce((sum, v) => sum + (parseInt(v) || 0), 0);
+        const progress = ((currentEntryIndex + 1) / entries.length) * 100;
+
+        return (
+          <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+            <div className="max-w-4xl mx-auto">
+              {/* Header */}
+              <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
+                <div className="flex justify-between items-center mb-4">
+                  <div>
+                    <p className="text-sm text-gray-600">กรรมการ</p>
+                    <p className="text-xl font-bold text-gray-800">👨‍⚖️ {judge?.name}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm text-gray-600">ความคืบหน้า</p>
+                    <p className="text-xl font-bold text-blue-600">
+                      {currentEntryIndex + 1} / {entries.length}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Progress Bar */}
+                <div className="w-full bg-gray-200 rounded-full h-3">
+                  <div
+                    className="bg-gradient-to-r from-blue-500 to-indigo-600 h-3 rounded-full transition-all duration-500"
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Entry Info */}
+              <div className="bg-gradient-to-br from-purple-500 to-indigo-600 rounded-2xl shadow-xl p-8 mb-6 text-white">
+                <div className="text-center">
+                  <div className="text-5xl mb-4">🎨</div>
+                  <h2 className="text-4xl font-bold mb-2">{entry.name}</h2>
+                  <p className="text-purple-100 text-lg">ประเภท: {category.name}</p>
+                </div>
+              </div>
+
+              {/* Scoring Form */}
+              <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
+                <h3 className="text-2xl font-bold text-gray-800 mb-6 text-center">
+                  ให้คะแนนแต่ละหมวด
+                </h3>
+
+                <div className="space-y-6">
+                  {category.criteria.map((crit, idx) => (
+                    <div key={idx} className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-xl">
+                      <div className="flex justify-between items-center mb-4">
+                        <label className="font-bold text-gray-800 text-lg">{crit.name}</label>
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="number"
+                            min="0"
+                            max={crit.maxScore}
+                            value={currentScore[idx] || 0}
+                            onChange={(e) => {
+                              const val = Math.min(parseInt(e.target.value) || 0, crit.maxScore);
+                              setCurrentScore({ ...currentScore, [idx]: val });
+                            }}
+                            className="w-24 px-4 py-3 border-2 border-blue-400 rounded-xl text-center font-bold text-2xl focus:border-blue-600 focus:outline-none"
+                          />
+                          <span className="text-gray-600 font-bold text-xl">/ {crit.maxScore}</span>
+                        </div>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max={crit.maxScore}
+                        value={currentScore[idx] || 0}
+                        onChange={(e) => setCurrentScore({ ...currentScore, [idx]: parseInt(e.target.value) })}
+                        className="slider-thumb w-full h-3 bg-blue-200 rounded-lg appearance-none cursor-pointer"
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                {/* Total Score Display */}
+                <div className={`mt-8 p-6 rounded-2xl text-center transition-all ${
+                  totalCurrent === totalMax 
+                    ? 'bg-gradient-to-r from-green-400 to-emerald-500 text-white shadow-lg' 
+                    : 'bg-gradient-to-r from-yellow-100 to-orange-100 border-2 border-yellow-400'
+                }`}>
+                  <p className="text-sm font-semibold mb-2 opacity-80">คะแนนรวม</p>
+                  <div className="text-5xl font-bold mb-2">
+                    {totalCurrent} / {totalMax}
+                  </div>
+                  {totalCurrent !== totalMax && (
+                    <p className="text-red-600 font-semibold text-sm">
+                      ⚠️ ต้องให้ครบ {totalMax} คะแนน
+                    </p>
+                  )}
+                  {totalCurrent === totalMax && (
+                    <p className="text-sm font-semibold">✅ พร้อมบันทึกคะแนน</p>
+                  )}
+                </div>
+
+                {/* Next Button */}
+                <button
+                  onClick={submitCurrentScore}
+                  disabled={totalCurrent !== totalMax}
+                  className={`w-full mt-6 py-5 rounded-xl text-xl font-bold transition-all transform ${
+                    totalCurrent === totalMax
+                      ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-600 hover:to-emerald-700 shadow-xl hover:shadow-2xl hover:-translate-y-1'
+                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  }`}
+                >
+                  {currentEntryIndex < entries.length - 1 ? '➡️ ถัดไป' : '✅ เสร็จสิ้น'}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      // COMPLETE SCREEN
+      if (mode === 'complete') {
+        const judge = judges.find(j => j.id === selectedJudge);
+        return (
+          <div className="min-h-screen bg-gradient-to-br from-green-400 via-emerald-500 to-teal-600 flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl shadow-2xl p-12 max-w-md w-full text-center">
+              <div className="text-8xl mb-6">🎉</div>
+              <h2 className="text-4xl font-bold text-gray-800 mb-4">เสร็จสิ้น!</h2>
+              <p className="text-xl text-gray-600 mb-2">ขอบคุณครับ</p>
+              <p className="text-lg text-gray-700 font-semibold mb-8">
+                คุณ {judge?.name}
+              </p>
+              <p className="text-gray-600 mb-8">
+                ให้คะแนนครบ {entries.length} ผลงานแล้ว
+              </p>
+              <button
+                onClick={() => setMode('start')}
+                className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-8 py-4 rounded-xl font-bold text-lg hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg hover:shadow-xl"
+              >
+                กลับหน้าหลัก
+              </button>
+            </div>
+          </div>
+        );
+      }
+
+      // ADMIN MODE
+      if (mode === 'admin') {
+        return (
+          <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+            <div className="max-w-6xl mx-auto">
+              <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
+                <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white flex justify-between items-center">
+                  <h1 className="text-3xl font-bold">⚙️ ผู้ดูแลระบบ</h1>
+                  <button
+                    onClick={() => setMode('start')}
+                    className="bg-white text-blue-600 px-6 py-2 rounded-lg font-semibold hover:bg-blue-50"
+                  >
+                    ← กลับ
+                  </button>
+                </div>
+
+                <div className="p-6 space-y-6">
+                  {/* Categories */}
+                  <div className="bg-blue-50 p-6 rounded-xl">
+                    <div className="flex justify-between items-center mb-4">
+                      <h2 className="text-2xl font-bold text-blue-900">📋 ประเภทการประกวด</h2>
+                      <button onClick={addCategory} className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-semibold">
+                        + เพิ่มประเภท
+                      </button>
+                    </div>
+                    
+                    {categories.map(cat => (
+                      <div key={cat.id} className="bg-white p-6 rounded-xl mb-4 shadow">
+                        <div className="flex justify-between items-center mb-4">
+                          <h3 className="font-bold text-xl">{cat.name}</h3>
+                          <span className={`px-4 py-2 rounded-full text-sm font-bold ${
+                            getTotalScore(cat.id) === 100 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                          }`}>
+                            รวม: {getTotalScore(cat.id)}/100
+                          </span>
+                        </div>
+
+                        {cat.criteria.map((crit, idx) => (
+                          <div key={idx} className="flex gap-2 mb-3">
+                            <input
+                              type="text"
+                              value={crit.name}
+                              onChange={(e) => updateCriteria(cat.id, idx, 'name', e.target.value)}
+                              className="flex-1 px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                              placeholder="ชื่อหมวดคะแนน"
+                            />
+                            <input
+                              type="number"
+                              value={crit.maxScore}
+                              onChange={(e) => updateCriteria(cat.id, idx, 'maxScore', e.target.value)}
+                              className="w-28 px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none text-center font-semibold"
+                              placeholder="คะแนน"
+                            />
+                            <button
+                              onClick={() => deleteCriteria(cat.id, idx)}
+                              className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 font-semibold"
+                            >
+                              ลบ
+                            </button>
+                          </div>
+                        ))}
+
+                        <button
+                          onClick={() => addCriteria(cat.id)}
+                          className="text-blue-600 hover:text-blue-800 mt-2 font-semibold"
+                        >
+                          + เพิ่มหมวดคะแนน
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Judges and Entries */}
+                  <div className="grid md:grid-cols-2 gap-6">
+                    <div className="bg-green-50 p-6 rounded-xl">
+                      <div className="flex justify-between items-center mb-4">
+                        <h2 className="text-2xl font-bold text-green-900">👨‍⚖️ กรรมการ ({judges.length})</h2>
+                        <button onClick={addJudge} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 font-semibold">
+                          + เพิ่ม
+                        </button>
+                      </div>
+                      <div className="space-y-2">
+                        {judges.map((judge, idx) => (
+                          <div key={judge.id} className="bg-white p-4 rounded-lg flex justify-between items-center shadow">
+                            <span className="font-semibold text-lg">{idx + 1}. {judge.name}</span>
+                            <button
+                              onClick={() => setJudges(judges.filter(j => j.id !== judge.id))}
+                              className="text-red-600 hover:text-red-800 font-semibold"
+                            >
+                              ลบ
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="bg-purple-50 p-6 rounded-xl">
+                      <div className="flex justify-between items-center mb-4">
+                        <h2 className="text-2xl font-bold text-purple-900">🎨 ผลงาน ({entries.length})</h2>
+                        <button onClick={addEntry} className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 font-semibold">
+                          + เพิ่ม
+                        </button>
+                      </div>
+                      <div className="space-y-2">
+                        {entries.map((entry, idx) => {
+                          const cat = categories.find(c => c.id === entry.categoryId);
+                          return (
+                            <div key={entry.id} className="bg-white p-4 rounded-lg shadow">
+                              <div className="flex justify-between items-center mb-2">
+                                <span className="font-semibold text-lg">{idx + 1}. {entry.name}</span>
+                                <button
+                                  onClick={() => setEntries(entries.filter(e => e.id !== entry.id))}
+                                  className="text-red-600 hover:text-red-800 font-semibold"
+                                >
+                                  ลบ
+                                </button>
+                              </div>
+                              <select
+                                value={entry.categoryId}
+                                onChange={(e) => {
+                                  setEntries(entries.map(e => 
+                                    e.id === entry.id ? { ...e, categoryId: e.target.value } : e
+                                  ));
+                                }}
+                                className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:outline-none"
+                              >
+                                {categories.map(c => (
+                                  <option key={c.id} value={c.id}>{c.name}</option>
+                                ))}
+                              </select>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Save Button */}
+                  <button
+                    onClick={saveData}
+                    className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-5 rounded-xl text-xl font-bold hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg hover:shadow-xl"
+                  >
+                    💾 บันทึกการตั้งค่า
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      // RESULTS MODE
+      if (mode === 'results') {
+        return (
+          <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-50 p-4">
+            <div className="max-w-6xl mx-auto">
+              <div className="bg-white rounded-2xl shadow-2xl overflow-hidden mb-6">
+                <div className="bg-gradient-to-r from-purple-600 to-pink-600 p-6 text-white flex justify-between items-center">
+                  <h1 className="text-3xl font-bold">🏆 ผลการแข่งขัน</h1>
+                  <button
+                    onClick={() => setMode('start')}
+                    className="bg-white text-purple-600 px-6 py-2 rounded-lg font-semibold hover:bg-purple-50"
+                  >
+                    ← กลับ
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-8">
+                {categories.map(cat => {
+                  const results = getEntryResults(cat.id);
+                  if (results.length === 0) return null;
+
+                  return (
+                    <div key={cat.id} className="bg-white rounded-2xl shadow-xl overflow-hidden">
+                      <div className="bg-gradient-to-r from-indigo-500 to-purple-600 p-6 text-white">
+                        <h2 className="text-2xl font-bold text-center">🏆 {cat.name}</h2>
+                      </div>
+
+                      <div className="p-6 space-y-4">
+                        {results.map((result, idx) => (
+                          <div
+                            key={result.entry.id}
+                            className={`rounded-xl shadow-lg overflow-hidden ${
+                              idx === 0
+                                ? 'bg-gradient-to-r from-yellow-400 to-orange-400 transform scale-105'
+                                : idx === 1
+                                ? 'bg-gradient-to-r from-gray-300 to-gray-400'
+                                : idx === 2
+                                ? 'bg-gradient-to-r from-orange-300 to-orange-400'
+                                : 'bg-white border-2 border-gray-200'
+                            }`}
+                          >
+                            <div className="p-6">
+                              <div className="flex justify-between items-center mb-4">
+                                <div className="flex items-center gap-4">
+                                  <span className={`text-5xl font-bold ${idx < 3 ? 'text-white' : 'text-gray-700'}`}>
+                                    {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`}
+                                  </span>
+                                  <div>
+                                    <h3 className={`text-2xl font-bold ${idx < 3 ? 'text-white' : 'text-gray-900'}`}>
+                                      {result.entry.name}
+                                    </h3>
+                                    <p className={`text-sm ${idx < 3 ? 'text-white opacity-90' : 'text-gray-600'}`}>
+                                      {result.scoreCount} กรรมการให้คะแนน
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <div className={`text-4xl font-bold ${idx < 3 ? 'text-white' : 'text-indigo-600'}`}>
+                                    {result.avgScore.toFixed(2)}
+                                  </div>
+                                  <div className={`text-sm ${idx < 3 ? 'text-white opacity-90' : 'text-gray-600'}`}>
+                                    คะแนนเฉลี่ย
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Score Details */}
+                              {result.details.length > 0 && (
+                                <div className="mt-4 space-y-3">
+                                  <p className={`font-semibold ${idx < 3 ? 'text-white opacity-90' : 'text-gray-700'}`}>
+                                    รายละเอียดคะแนน:
+                                  </p>
+                                  {result.details.map((detail, dIdx) => {
+                                    const judge = judges.find(j => j.id === detail.judgeId);
+                                    const totalScore = Object.values(detail.scores).reduce((sum, v) => sum + (parseInt(v) || 0), 0);
+                                    const date = new Date(detail.timestamp);
+
+                                    return (
+                                      <div
+                                        key={dIdx}
+                                        className={`p-4 rounded-lg ${
+                                          idx < 3 ? 'bg-white/20 backdrop-blur' : 'bg-gray-50'
+                                        }`}
+                                      >
+                                        <div className="flex justify-between items-center mb-3">
+                                          <span className={`font-semibold ${idx < 3 ? 'text-white' : 'text-gray-800'}`}>
+                                            👨‍⚖️ {judge?.name || 'ไม่ระบุ'}
+                                          </span>
+                                          <span className={`font-bold text-lg ${idx < 3 ? 'text-white' : 'text-indigo-600'}`}>
+                                            {totalScore} คะแนน
+                                          </span>
+                                        </div>
+                                        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                                          {Object.entries(detail.scores).map(([key, value], sIdx) => (
+                                            <div key={sIdx} className={`text-sm ${idx < 3 ? 'text-white opacity-90' : 'text-gray-700'}`}>
+                                              • {cat.criteria[key]?.name}: <span className="font-semibold">{value}/{cat.criteria[key]?.maxScore}</span>
+                                            </div>
+                                          ))}
+                                        </div>
+                                        <div className={`text-xs mt-2 ${idx < 3 ? 'text-white opacity-75' : 'text-gray-500'}`}>
+                                          ⏰ {date.toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' })} {date.toLocaleTimeString('th-TH')}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      return null;
+    }
+
+    ReactDOM.render(<App />, document.getElementById('root'));
+  </script>
+</body>
+</html>
