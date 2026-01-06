@@ -196,10 +196,7 @@
 
         // ตรวจสอบว่ากรอกคะแนนครบทุกหมวดหรือไม่
         const allFilled = category.criteria.every((_, idx) => currentScore[idx] !== undefined && currentScore[idx] !== '');
-        
-        if (!allFilled) {
-          alert('⚠️ กรุณาให้คะแนนให้ครบทุกหมวด');
-          return;
+      
         }
 
         const newScore = {
@@ -429,14 +426,10 @@
                   <div className="text-5xl font-bold mb-2">
                     {totalCurrent} / {totalMax}
                   </div>
-                  {!allFilled && (
-                    <p className="text-red-600 font-semibold text-sm">
-                      ⚠️ กรุณาให้คะแนนครบทุกหมวด
-                    </p>
-                  )}
-                  {allFilled && (
-                    <p className="text-sm font-semibold">✅ พร้อมบันทึกคะแนน</p>
-                  )}
+                 <p className="text-sm font-semibold">
+                ✅ กดบันทึกได้เลย (ไม่จำเป็นต้องครบ {totalMax})
+              </p>
+
                 </div>
 
                 <button
@@ -525,8 +518,9 @@
                           </div>
                         </div>
 
-                        {cat.criteria.map((crit, idx) => (
-                          <div key={idx} className="flex gap-2 mb-3">
+                       {cat.criteria.map((crit, idx) => (
+                        <div key={crit.id || idx} className="flex gap-2 mb-3">
+
                             <input
                               type="text"
                               value={crit.name}
@@ -765,4 +759,5 @@
   </script>
 </body>
 </html>
+
 
