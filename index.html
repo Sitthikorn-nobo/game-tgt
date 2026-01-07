@@ -30,8 +30,8 @@ const storage = {
   get: async (key) => {
     try {
       // ถ้ามี window.storage (บางแพลตฟอร์ม)
-      if (window.storage && typeof window.storage.get === 'function') {
-        const res = await window.storage.get(key);
+      if (storage && typeof wstorage.get === 'function') {
+        const res = await storage.get(key);
         // รองรับทั้ง {value: "..."} และ "..." ตรงๆ
         const val = (res && typeof res === 'object' && 'value' in res) ? res.value : res;
         return val ?? null;
@@ -45,8 +45,8 @@ const storage = {
   },
   set: async (key, value) => {
     try {
-      if (window.storage && typeof window.storage.set === 'function') {
-        await window.storage.set(key, value);
+      if (storage && typeof storage.set === 'function') {
+        await storage.set(key, value);
         return;
       }
       localStorage.setItem(key, value);
@@ -891,5 +891,6 @@ const storage = {
   </script>
 </body>
 </html>
+
 
 
