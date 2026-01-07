@@ -19,26 +19,30 @@
 
   <script type="text/babel">
     const { useState, useEffect } = React;
-    // ✅ Storage Adapter (กันพังทั้งบนมือถือ / GitHub Pages / QR / ไม่มี window.storage)
-    // ===============================
+
+// ===============================
 // 🌐 Google Sheet API + Event
 // ===============================
 const API_URL = "https://script.google.com/macros/s/AKfycbw56eIuycPxy1cSz1vh2gv2sKGdSJ3fCYfs9dFIk3Z8tjHfsuzUrM3BLD31Mrp1KQ4l/exec";
 const params = new URLSearchParams(window.location.search);
-const eventId = params.get("eventId") || ""; // ถ้ามี = โหมดแชร์ข้ามเครื่อง
+const eventId = params.get("eventId") || "";
 
-// ✅ Storage Adapter (กันพังทั้งบนมือถือ / GitHub Pages / QR / ไม่มี window.storage)
-const storage = {
+// ===============================
+// ✅ Storage Adapter (GitHub Pages / QR / ทุกเครื่อง)
+// ===============================
+const storageAdapter = {
   get: async (key) => {
     try {
       if (window.storage && typeof window.storage.get === "function") {
         const res = await window.storage.get(key);
-        const val = (res && typeof res === "object" && "value" in res) ? res.value : res;
+        const val = (res && typeof res === "object" && "value" in res)
+          ? res.value
+          : res;
         return val ?? null;
       }
       return localStorage.getItem(key);
     } catch (e) {
-      console.error("storage.get error", key, e);
+      console.error("storageAdapter.get error", key, e);
       return localStorage.getItem(key);
     }
   },
@@ -50,21 +54,7 @@ const storage = {
       }
       localStorage.setItem(key, value);
     } catch (e) {
-      console.error("storage.set error", key, e);
-      localStorage.setItem(key, value);
-    }
-  }
-};
-  set: async (key, value) => {
-    try {
-      if (storage && typeof storage.set === 'function') {
-        await storage.set(key, value);
-        return;
-      }
-      localStorage.setItem(key, value);
-    } catch (e) {
-      console.error('storage.set error', key, e);
-      // fallback สุดท้าย
+      console.error("storageAdapter.set error", key, e);
       localStorage.setItem(key, value);
     }
   }
@@ -127,10 +117,10 @@ const storage = {
 
     // 🟢 ไม่มี eventId → โหลดจาก localStorage เหมือนเดิม
     const [catStr, judgeStr, entryStr, scoreStr] = await Promise.all([
-      storage.get('categories'),
-      storage.get('judges'),
-      storage.get('entries'),
-      storage.get('scores'),
+      storageAdapter.get('categories'),
+      storageAdapter.get('judges'),
+      storageAdapter.get('entries'),
+      storageAdapter.get('scores'),
     ]);
 
     if (catStr) setCategories(JSON.parse(catStr));
@@ -161,10 +151,10 @@ const storage = {
       const autoSave = async () => {
         try {
           await Promise.all([
-  storage.set('categories', JSON.stringify(categories)),
-  storage.set('judges', JSON.stringify(judges)),
-  storage.set('entries', JSON.stringify(entries)),
-  storage.set('scores', JSON.stringify(scores))
+  storageAdapter.set('categories', JSON.stringify(categories)),
+  storageAdapter.set('judges', JSON.stringify(judges)),
+  storageAdapter.set('entries', JSON.stringify(entries)),
+  storageAdapter.set('scores', JSON.stringify(scores))
   ]);
 
           setSaveStatus('✅ บันทึกอัตโนมัติสำเร็จ');
@@ -197,10 +187,10 @@ const storage = {
 
     // 🟢 ไม่มี eventId → เซฟ local เหมือนเดิม
     await Promise.all([
-      storage.set('categories', JSON.stringify(categories)),
-      storage.set('judges', JSON.stringify(judges)),
-      storage.set('entries', JSON.stringify(entries)),
-      storage.set('scores', JSON.stringify(scores))
+      storageAdapter.set('categories', JSON.stringify(categories)),
+      storageAdapter.set('judges', JSON.stringify(judges)),
+      storageAdapter.set('entries', JSON.stringify(entries)),
+      storageAdapter.set('scores', JSON.stringify(scores))
     ]);
 
     setSaveStatus('✅ บันทึกสำเร็จ!');
@@ -239,9 +229,9 @@ const storage = {
   
   try {
     await Promise.all([
-      storage.set('categories', JSON.stringify(newCategories)),
-      storage.set('entries', JSON.stringify(newEntries)),
-      storage.set('scores', JSON.stringify(newScores))
+      storageAdapter.set('categories', JSON.stringify(newCategories)),
+      storageAdapter.set('entries', JSON.stringify(newEntries)),
+      storageAdapter.set('scores', JSON.stringify(newScores))
     ]);
     alert('✅ ลบประเภทสำเร็จ!');
   } catch (error) {
@@ -342,7 +332,7 @@ const storage = {
         setScores(updatedScores);
         
         try {
-          await storage.set('scores', JSON.stringify(updatedScores));
+          await storageAdapter.set('scores', JSON.stringify(updatedScores));
         } catch (error) {
           console.error('บันทึกคะแนนล้มเหลว:', error);
         }
@@ -905,6 +895,7 @@ root.render(React.createElement(App));
   </script>
 </body>
 </html>
+
 
 
 
