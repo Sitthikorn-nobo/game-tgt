@@ -887,10 +887,13 @@ const storage = {
       return null;
     }
 
-    ReactDOM.render(<App />, document.getElementById('root'));
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(React.createElement(App));
+
   </script>
 </body>
 </html>
+
 
 
 
