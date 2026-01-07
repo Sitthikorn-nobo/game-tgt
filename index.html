@@ -19,6 +19,39 @@
 
   <script type="text/babel">
     const { useState, useEffect } = React;
+    // ✅ Storage Adapter (กันพังทั้งบนมือถือ / GitHub Pages / QR / ไม่มี window.storage)
+const storage = {
+  get: async (key) => {
+    try {
+      // ถ้ามี window.storage (บางแพลตฟอร์ม)
+      if (window.storage && typeof window.storage.get === 'function') {
+        const res = await window.storage.get(key);
+        // รองรับทั้ง {value: "..."} และ "..." ตรงๆ
+        const val = (res && typeof res === 'object' && 'value' in res) ? res.value : res;
+        return val ?? null;
+      }
+      // fallback: localStorage
+      return localStorage.getItem(key);
+    } catch (e) {
+      console.error('storage.get error', key, e);
+      return localStorage.getItem(key);
+    }
+  },
+  set: async (key, value) => {
+    try {
+      if (window.storage && typeof window.storage.set === 'function') {
+        await window.storage.set(key, value);
+        return;
+      }
+      localStorage.setItem(key, value);
+    } catch (e) {
+      console.error('storage.set error', key, e);
+      // fallback สุดท้าย
+      localStorage.setItem(key, value);
+    }
+  }
+};
+
 
     function App() {
       const [mode, setMode] = useState('start');
@@ -45,59 +78,53 @@
         }
       }, [categories, judges, entries, scores]);
 
-      const loadData = async () => {
-        try {
-          setLoading(true);
-          const results = await Promise.allSettled([
-            window.storage.get('categories'),
-            window.storage.get('judges'),
-            window.storage.get('entries'),
-            window.storage.get('scores')
-          ]);
+     const loadData = async () => {
+  try {
+    setLoading(true);
 
-          if (results[0].status === 'fulfilled' && results[0].value?.value) {
-            setCategories(JSON.parse(results[0].value.value));
-          } else {
-            // ตั้งค่าเริ่มต้น
-            setCategories([{
-              id: 'cat1',
-              name: 'สิ่งประดิษฐ์ทั่วไป',
-              criteria: [
-                { id: `crit_${Date.now()}_1`, name: 'การนำเสนอ', maxScore: 20 },
-                { id: `crit_${Date.now()}_2`, name: 'ความคิดสร้างสรรค์', maxScore: 20 },
-                { id: `crit_${Date.now()}_3`, name: 'ความสวยงาม', maxScore: 20 },
-                { id: `crit_${Date.now()}_4`, name: 'ความเป็นประโยชน์', maxScore: 20 },
-                { id: `crit_${Date.now()}_5`, name: 'ฝีมือและเทคนิค', maxScore: 20 }
-              ]
-            }]);
-          }
+    const [catStr, judgeStr, entryStr, scoreStr] = await Promise.all([
+      storage.get('categories'),
+      storage.get('judges'),
+      storage.get('entries'),
+      storage.get('scores'),
+    ]);
 
-          if (results[1].status === 'fulfilled' && results[1].value?.value) {
-            setJudges(JSON.parse(results[1].value.value));
-          }
+    if (catStr) {
+      setCategories(JSON.parse(catStr));
+    } else {
+      setCategories([{
+        id: 'cat1',
+        name: 'สิ่งประดิษฐ์ทั่วไป',
+        criteria: [
+          { id: `crit_${Date.now()}_1`, name: 'การนำเสนอ', maxScore: 20 },
+          { id: `crit_${Date.now()}_2`, name: 'ความคิดสร้างสรรค์', maxScore: 20 },
+          { id: `crit_${Date.now()}_3`, name: 'ความสวยงาม', maxScore: 20 },
+          { id: `crit_${Date.now()}_4`, name: 'ความเป็นประโยชน์', maxScore: 20 },
+          { id: `crit_${Date.now()}_5`, name: 'ฝีมือและเทคนิค', maxScore: 20 }
+        ]
+      }]);
+    }
 
-          if (results[2].status === 'fulfilled' && results[2].value?.value) {
-            setEntries(JSON.parse(results[2].value.value));
-          }
+    if (judgeStr) setJudges(JSON.parse(judgeStr));
+    if (entryStr) setEntries(JSON.parse(entryStr));
+    if (scoreStr) setScores(JSON.parse(scoreStr));
 
-          if (results[3].status === 'fulfilled' && results[3].value?.value) {
-            setScores(JSON.parse(results[3].value.value));
-          }
-        } catch (error) {
-          console.error('โหลดข้อมูลล้มเหลว:', error);
-        } finally {
-          setLoading(false);
-        }
-      };
+  } catch (error) {
+    console.error('โหลดข้อมูลล้มเหลว:', error);
+  } finally {
+    setLoading(false);
+  }
+};
 
       const autoSave = async () => {
         try {
           await Promise.all([
-            window.storage.set('categories', JSON.stringify(categories)),
-            window.storage.set('judges', JSON.stringify(judges)),
-            window.storage.set('entries', JSON.stringify(entries)),
-            window.storage.set('scores', JSON.stringify(scores))
-          ]);
+  storage.set('categories', JSON.stringify(categories)),
+  storage.set('judges', JSON.stringify(judges)),
+  storage.set('entries', JSON.stringify(entries)),
+  storage.set('scores', JSON.stringify(scores))
+  ]);
+
           setSaveStatus('✅ บันทึกอัตโนมัติสำเร็จ');
           setTimeout(() => setSaveStatus(''), 2000);
         } catch (error) {
@@ -254,7 +281,7 @@
         setScores(updatedScores);
         
         try {
-          await window.storage.set('scores', JSON.stringify(updatedScores));
+          await storage.set('scores', JSON.stringify(updatedScores));
         } catch (error) {
           console.error('บันทึกคะแนนล้มเหลว:', error);
         }
@@ -815,3 +842,4 @@
   </script>
 </body>
 </html>
+
