@@ -3,11 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ระบบให้คะแนนการประกวด</title>
+  <title>ระบบให้คะแนนการประกวด (Firebase)</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- 🔥 Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+  
   <style>
     body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
     .slider-thumb::-webkit-slider-thumb { appearance: none; width: 24px; height: 24px; background: #3b82f6; border-radius: 50%; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.3); }
@@ -20,46 +25,82 @@
   <script type="text/babel">
     const { useState, useEffect } = React;
 
-// ===============================
-// 🌐 Google Sheet API + Event
-// ===============================
-const API_URL = "https://script.google.com/macros/s/AKfycbw56eIuycPxy1cSz1vh2gv2sKGdSJ3fCYfs9dFIk3Z8tjHfsuzUrM3BLD31Mrp1KQ4l/exec";
-const params = new URLSearchParams(window.location.search);
-const eventId = params.get("eventId") || "";
+    // ===============================
+    // 🔥 Firebase Configuration
+    // ===============================
+    // 👉 แทนที่ค่าเหล่านี้ด้วย Config จาก Firebase Console
+      const firebaseConfig = {
+    apiKey: "AIzaSyAv__40vL-tk9XrQXJjO_J3k9ReDVQBzNc",
+    authDomain: "scoring-system-9edd3.firebaseapp.com",
+    databaseURL: "https://scoring-system-9edd3-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "scoring-system-9edd3",
+    storageBucket: "scoring-system-9edd3.firebasestorage.app",
+    messagingSenderId: "82996489684",
+    appId: "1:82996489684:web:2d39de2880aaa002d4ba41",
+    measurementId: "G-NVN3N1QQH4"
+  };
 
-// ===============================
-// ✅ Storage Adapter (GitHub Pages / QR / ทุกเครื่อง)
-// ===============================
-const storageAdapter = {
-  get: async (key) => {
-    try {
-      if (window.storage && typeof window.storage.get === "function") {
-        const res = await window.storage.get(key);
-        const val = (res && typeof res === "object" && "value" in res)
-          ? res.value
-          : res;
-        return val ?? null;
-      }
-      return localStorage.getItem(key);
-    } catch (e) {
-      console.error("storageAdapter.get error", key, e);
-      return localStorage.getItem(key);
-    }
-  },
-  set: async (key, value) => {
-    try {
-      if (window.storage && typeof window.storage.set === "function") {
-        await window.storage.set(key, value);
-        return;
-      }
-      localStorage.setItem(key, value);
-    } catch (e) {
-      console.error("storageAdapter.set error", key, e);
-      localStorage.setItem(key, value);
-    }
-  }
-};
+    // ตรวจสอบว่า Firebase config ถูกต้อง
+    const isFirebaseConfigured = firebaseConfig.apiKey !== "YOUR_API_KEY";
 
+    // Initialize Firebase
+    let db = null;
+    if (isFirebaseConfigured) {
+      try {
+        if (!firebase.apps.length) {
+          firebase.initializeApp(firebaseConfig);
+        }
+        db = firebase.database();
+        console.log('✅ Firebase initialized successfully');
+      } catch (error) {
+        console.error('❌ Firebase initialization error:', error);
+      }
+    }
+
+    // ดึง eventId จาก URL (สำหรับแชร์หลายคน)
+    const params = new URLSearchParams(window.location.search);
+    const eventId = params.get("eventId") || "default-event";
+
+    // ===============================
+    // 📦 Storage Adapter (Firebase + LocalStorage)
+    // ===============================
+    const storageAdapter = {
+      get: async (key) => {
+        try {
+          if (db) {
+            const snapshot = await db.ref(`events/${eventId}/${key}`).once('value');
+            return snapshot.val();
+          }
+          return localStorage.getItem(`${eventId}_${key}`);
+        } catch (error) {
+          console.error('Storage get error:', error);
+          return localStorage.getItem(`${eventId}_${key}`);
+        }
+      },
+
+      set: async (key, value) => {
+        try {
+          if (db) {
+            await db.ref(`events/${eventId}/${key}`).set(value);
+          }
+          localStorage.setItem(`${eventId}_${key}`, value);
+        } catch (error) {
+          console.error('Storage set error:', error);
+          localStorage.setItem(`${eventId}_${key}`, value);
+        }
+      },
+
+      subscribe: (key, callback) => {
+        if (db) {
+          const ref = db.ref(`events/${eventId}/${key}`);
+          ref.on('value', (snapshot) => {
+            callback(snapshot.val());
+          });
+          return () => ref.off('value');
+        }
+        return () => {};
+      }
+    };
 
     function App() {
       const [mode, setMode] = useState('start');
@@ -73,173 +114,117 @@ const storageAdapter = {
       const [currentScore, setCurrentScore] = useState({});
       const [loading, setLoading] = useState(true);
       const [saveStatus, setSaveStatus] = useState('');
+      const [firebaseStatus, setFirebaseStatus] = useState('');
 
-      // ✅ โหลดข้อมูลเมื่อเริ่มต้น
       useEffect(() => {
         loadData();
+        
+        if (db) {
+          const unsubscribeScores = storageAdapter.subscribe('scores', (data) => {
+            if (data) setScores(JSON.parse(data));
+          });
+          return () => unsubscribeScores();
+        }
       }, []);
 
-      // ✅ บันทึกอัตโนมัติทุกครั้งที่มีการเปลี่ยนแปลง
       useEffect(() => {
-        if (!loading) {
-          autoSave();
+        if (isFirebaseConfigured && db) {
+          setFirebaseStatus('🔥 Firebase: เชื่อมต่อแล้ว');
+        } else {
+          setFirebaseStatus('⚠️ ใช้งานแบบ Offline (localStorage)');
         }
-      }, [categories, judges, entries, scores]);
+      }, []);
 
-    const loadData = async () => {
-  try {
-    setLoading(true);
-
-    // 🔵 ถ้ามี eventId → โหลดจาก Google Sheet (แชร์ข้ามเครื่อง/QR)
-    if (eventId) {
-      const res = await fetch(API_URL, {
-        method: "POST",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({ action: "load", eventId })
-      });
-      const json = await res.json();
-
-      if (json.ok && json.payload) {
-        setCategories(json.payload.categories || []);
-        setJudges(json.payload.judges || []);
-        setEntries(json.payload.entries || []);
-        setScores(json.payload.scores || []);
-        return;
-      }
-
-      // ถ้า eventId ไม่เจอ → เริ่มว่างๆ
-      setCategories([]);
-      setJudges([]);
-      setEntries([]);
-      setScores([]);
-      return;
-    }
-
-    // 🟢 ไม่มี eventId → โหลดจาก localStorage เหมือนเดิม
-    const [catStr, judgeStr, entryStr, scoreStr] = await Promise.all([
-      storageAdapter.get('categories'),
-      storageAdapter.get('judges'),
-      storageAdapter.get('entries'),
-      storageAdapter.get('scores'),
-    ]);
-
-    if (catStr) setCategories(JSON.parse(catStr));
-    else {
-      setCategories([{
-        id: 'cat1',
-        name: 'สิ่งประดิษฐ์ทั่วไป',
-        criteria: [
-          { id: `crit_${Date.now()}_1`, name: 'การนำเสนอ', maxScore: 20 },
-          { id: `crit_${Date.now()}_2`, name: 'ความคิดสร้างสรรค์', maxScore: 20 },
-          { id: `crit_${Date.now()}_3`, name: 'ความสวยงาม', maxScore: 20 },
-          { id: `crit_${Date.now()}_4`, name: 'ความเป็นประโยชน์', maxScore: 20 },
-          { id: `crit_${Date.now()}_5`, name: 'ฝีมือและเทคนิค', maxScore: 20 }
-        ]
-      }]);
-    }
-
-    if (judgeStr) setJudges(JSON.parse(judgeStr));
-    if (entryStr) setEntries(JSON.parse(entryStr));
-    if (scoreStr) setScores(JSON.parse(scoreStr));
-  } catch (error) {
-    console.error('โหลดข้อมูลล้มเหลว:', error);
-  } finally {
-    setLoading(false);
-  }
-};
-
-      const autoSave = async () => {
+      const loadData = async () => {
         try {
-          await Promise.all([
-  storageAdapter.set('categories', JSON.stringify(categories)),
-  storageAdapter.set('judges', JSON.stringify(judges)),
-  storageAdapter.set('entries', JSON.stringify(entries)),
-  storageAdapter.set('scores', JSON.stringify(scores))
-  ]);
+          setLoading(true);
 
-          setSaveStatus('✅ บันทึกอัตโนมัติสำเร็จ');
-          setTimeout(() => setSaveStatus(''), 2000);
+          const [catStr, judgeStr, entryStr, scoreStr] = await Promise.all([
+            storageAdapter.get('categories'),
+            storageAdapter.get('judges'),
+            storageAdapter.get('entries'),
+            storageAdapter.get('scores'),
+          ]);
+
+          if (catStr) setCategories(JSON.parse(catStr));
+          else {
+            setCategories([{
+              id: 'cat1',
+              name: 'สิ่งประดิษฐ์ทั่วไป',
+              criteria: [
+                { id: `crit_1`, name: 'การนำเสนอ', maxScore: 20 },
+                { id: `crit_2`, name: 'ความคิดสร้างสรรค์', maxScore: 20 },
+                { id: `crit_3`, name: 'ความสวยงาม', maxScore: 20 },
+                { id: `crit_4`, name: 'ความเป็นประโยชน์', maxScore: 20 },
+                { id: `crit_5`, name: 'ฝีมือและเทคนิค', maxScore: 20 }
+              ]
+            }]);
+          }
+
+          if (judgeStr) setJudges(JSON.parse(judgeStr));
+          if (entryStr) setEntries(JSON.parse(entryStr));
+          if (scoreStr) setScores(JSON.parse(scoreStr));
+
         } catch (error) {
-          console.error('บันทึกอัตโนมัติล้มเหลว:', error);
-          setSaveStatus('⚠️ บันทึกล้มเหลว');
+          console.error('โหลดข้อมูลล้มเหลว:', error);
+        } finally {
+          setLoading(false);
         }
       };
 
       const saveData = async () => {
-  try {
-    setSaveStatus('กำลังบันทึก...');
-
-    // 🔵 ถ้ามี eventId → เซฟขึ้น Google Sheet
-    if (eventId) {
-      const payload = { categories, judges, entries, scores };
-      const res = await fetch(API_URL, {
-        method: "POST",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({ action: "save", eventId, payload })
-      });
-      const json = await res.json();
-      if (!json.ok) throw new Error(json.error || "save failed");
-
-      setSaveStatus('✅ บันทึกสำเร็จ!');
-      alert('✅ บันทึกข้อมูลสำเร็จ!');
-      return;
-    }
-
-    // 🟢 ไม่มี eventId → เซฟ local เหมือนเดิม
-    await Promise.all([
-      storageAdapter.set('categories', JSON.stringify(categories)),
-      storageAdapter.set('judges', JSON.stringify(judges)),
-      storageAdapter.set('entries', JSON.stringify(entries)),
-      storageAdapter.set('scores', JSON.stringify(scores))
-    ]);
-
-    setSaveStatus('✅ บันทึกสำเร็จ!');
-    alert('✅ บันทึกข้อมูลสำเร็จ!');
-  } catch (error) {
-    console.error('บันทึกข้อมูลล้มเหลว:', error);
-    setSaveStatus('❌ บันทึกล้มเหลว');
-    alert('❌ เกิดข้อผิดพลาด: ' + error.message);
-  }
-};
-
+        try {
+          setSaveStatus('กำลังบันทึก...');
+          await Promise.all([
+            storageAdapter.set('categories', JSON.stringify(categories)),
+            storageAdapter.set('judges', JSON.stringify(judges)),
+            storageAdapter.set('entries', JSON.stringify(entries)),
+            storageAdapter.set('scores', JSON.stringify(scores))
+          ]);
+          setSaveStatus('✅ บันทึกสำเร็จ!');
+          alert('✅ บันทึกข้อมูลสำเร็จ!');
+          setTimeout(() => setSaveStatus(''), 3000);
+        } catch (error) {
+          setSaveStatus('❌ บันทึกล้มเหลว');
+          alert('❌ เกิดข้อผิดพลาด: ' + error.message);
+        }
+      };
 
       const addCategory = () => {
         const name = prompt('ชื่อประเภท:');
         if (name) {
-          setCategories([...categories, {
+          const newCategories = [...categories, {
             id: `cat${Date.now()}`,
             name,
             criteria: [{ id: `crit_${Date.now()}`, name: 'หมวดคะแนน 1', maxScore: 100 }]
-          }]);
+          }];
+          setCategories(newCategories);
+          storageAdapter.set('categories', JSON.stringify(newCategories));
         }
       };
 
       const deleteCategory = async (catId) => {
-  if (!confirm('⚠️ คุณแน่ใจหรือไม่ที่จะลบประเภทนี้?\n\nการลบจะทำให้:\n- ประเภทนี้หายไป\n- ผลงานในประเภทนี้ถูกลบ\n- คะแนนทั้งหมดถูกลบ')) return;
-  
-  const newCategories = categories.filter(c => c.id !== catId);
-  setCategories(newCategories);
-  
-  const newEntries = entries.filter(e => e.categoryId !== catId);
-  setEntries(newEntries);
-  
-  const deletedEntryIds = entries.filter(e => e.categoryId === catId).map(e => e.id);
-  const newScores = scores.filter(s => !deletedEntryIds.includes(s.entryId));
-  setScores(newScores);
-  
-  try {
-    await Promise.all([
-      storageAdapter.set('categories', JSON.stringify(newCategories)),
-      storageAdapter.set('entries', JSON.stringify(newEntries)),
-      storageAdapter.set('scores', JSON.stringify(newScores))
-    ]);
-    alert('✅ ลบประเภทสำเร็จ!');
-  } catch (error) {
-    alert('❌ เกิดข้อผิดพลาดในการบันทึก');
-  }
-};
+        if (!confirm('⚠️ คุณแน่ใจหรือไม่ที่จะลบประเภทนี้?')) return;
+        
+        const newCategories = categories.filter(c => c.id !== catId);
+        const newEntries = entries.filter(e => e.categoryId !== catId);
+        const deletedEntryIds = entries.filter(e => e.categoryId === catId).map(e => e.id);
+        const newScores = scores.filter(s => !deletedEntryIds.includes(s.entryId));
+        
+        setCategories(newCategories);
+        setEntries(newEntries);
+        setScores(newScores);
+        
+        await Promise.all([
+          storageAdapter.set('categories', JSON.stringify(newCategories)),
+          storageAdapter.set('entries', JSON.stringify(newEntries)),
+          storageAdapter.set('scores', JSON.stringify(newScores))
+        ]);
+        alert('✅ ลบประเภทสำเร็จ!');
+      };
+
       const addCriteria = (catId) => {
-        setCategories(categories.map(cat => {
+        const newCategories = categories.map(cat => {
           if (cat.id === catId) {
             return {
               ...cat,
@@ -247,27 +232,36 @@ const storageAdapter = {
             };
           }
           return cat;
-        }));
+        });
+        setCategories(newCategories);
+        storageAdapter.set('categories', JSON.stringify(newCategories));
       };
 
       const updateCriteria = (catId, index, field, value) => {
-        setCategories(categories.map(cat => {
+        const newCategories = categories.map(cat => {
           if (cat.id === catId) {
             const newCriteria = [...cat.criteria];
-            newCriteria[index] = { ...newCriteria[index], [field]: field === 'maxScore' ? parseInt(value) || 0 : value };
+            newCriteria[index] = { 
+              ...newCriteria[index], 
+              [field]: field === 'maxScore' ? parseInt(value) || 0 : value 
+            };
             return { ...cat, criteria: newCriteria };
           }
           return cat;
-        }));
+        });
+        setCategories(newCategories);
+        storageAdapter.set('categories', JSON.stringify(newCategories));
       };
 
       const deleteCriteria = (catId, index) => {
-        setCategories(categories.map(cat => {
+        const newCategories = categories.map(cat => {
           if (cat.id === catId) {
             return { ...cat, criteria: cat.criteria.filter((_, i) => i !== index) };
           }
           return cat;
-        }));
+        });
+        setCategories(newCategories);
+        storageAdapter.set('categories', JSON.stringify(newCategories));
       };
 
       const getTotalScore = (catId) => {
@@ -277,27 +271,38 @@ const storageAdapter = {
 
       const addJudge = () => {
         const name = prompt('ชื่อกรรมการ:');
-        if (name) setJudges([...judges, { id: `j${Date.now()}`, name }]);
+        if (name) {
+          const newJudges = [...judges, { id: `j${Date.now()}`, name }];
+          setJudges(newJudges);
+          storageAdapter.set('judges', JSON.stringify(newJudges));
+        }
       };
 
       const addEntry = () => {
         const name = prompt('ชื่อผลงาน/ทีม:');
-        if (name && categories.length > 0) {
-          if (categories.length === 1) {
-            setEntries([...entries, { id: `e${Date.now()}`, name, categoryId: categories[0].id }]);
-          } else {
-            const categoryOptions = categories.map((c, i) => `${i + 1}. ${c.name}`).join('\n');
-            const selection = prompt(`เลือกประเภท (กรอกหมายเลข 1-${categories.length}):\n${categoryOptions}`);
-            const index = parseInt(selection) - 1;
-            
-            if (index >= 0 && index < categories.length) {
-              setEntries([...entries, { id: `e${Date.now()}`, name, categoryId: categories[index].id }]);
-            } else {
-              alert('❌ เลือกประเภทไม่ถูกต้อง');
-            }
-          }
-        } else if (categories.length === 0) {
+        if (!name) return;
+        
+        if (categories.length === 0) {
           alert('❌ กรุณาเพิ่มประเภทก่อน');
+          return;
+        }
+        
+        if (categories.length === 1) {
+          const newEntries = [...entries, { id: `e${Date.now()}`, name, categoryId: categories[0].id }];
+          setEntries(newEntries);
+          storageAdapter.set('entries', JSON.stringify(newEntries));
+        } else {
+          const categoryOptions = categories.map((c, i) => `${i + 1}. ${c.name}`).join('\n');
+          const selection = prompt(`เลือกประเภท (1-${categories.length}):\n${categoryOptions}`);
+          const index = parseInt(selection) - 1;
+          
+          if (index >= 0 && index < categories.length) {
+            const newEntries = [...entries, { id: `e${Date.now()}`, name, categoryId: categories[index].id }];
+            setEntries(newEntries);
+            storageAdapter.set('entries', JSON.stringify(newEntries));
+          } else {
+            alert('❌ เลือกประเภทไม่ถูกต้อง');
+          }
         }
       };
 
@@ -312,12 +317,12 @@ const storageAdapter = {
         const entry = entries[currentEntryIndex];
         const category = categories.find(c => c.id === entry.categoryId);
         
-        const allFilled = category.criteria.every((_, idx) => currentScore[idx] !== undefined && currentScore[idx] !== '');
+        const allFilled = category.criteria.every((_, idx) => 
+          currentScore[idx] !== undefined && currentScore[idx] !== ''
+        );
         
         if (!allFilled) {
-          if (!confirm('⚠️ คุณยังกรอกคะแนนไม่ครบทุกหมวด ต้องการบันทึกต่อหรือไม่?')) {
-            return;
-          }
+          if (!confirm('⚠️ คุณยังกรอกคะแนนไม่ครบ ต้องการบันทึกต่อหรือไม่?')) return;
         }
 
         const newScore = {
@@ -330,18 +335,13 @@ const storageAdapter = {
 
         const updatedScores = [...scores, newScore];
         setScores(updatedScores);
-        
-        try {
-          await storageAdapter.set('scores', JSON.stringify(updatedScores));
-        } catch (error) {
-          console.error('บันทึกคะแนนล้มเหลว:', error);
-        }
+        await storageAdapter.set('scores', JSON.stringify(updatedScores));
 
         if (currentEntryIndex < entries.length - 1) {
           setCurrentEntryIndex(currentEntryIndex + 1);
           setCurrentScore({});
         } else {
-          alert('🎉 ให้คะแนนเสร็จสิ้น! ขอบคุณครับ');
+          alert('🎉 ให้คะแนนเสร็จสิ้น!');
           setMode('complete');
         }
       };
@@ -364,8 +364,9 @@ const storageAdapter = {
       if (loading) {
         return (
           <div className="min-h-screen bg-gradient-to-br from-purple-600 via-blue-600 to-indigo-700 flex items-center justify-center">
-            <div className="text-white text-2xl font-bold">
-              <div className="animate-pulse">🔄 กำลังโหลดข้อมูล...</div>
+            <div className="text-white text-2xl font-bold text-center">
+              <div className="animate-pulse mb-4">🔄 กำลังโหลด...</div>
+              <div className="text-sm">{firebaseStatus}</div>
             </div>
           </div>
         );
@@ -376,35 +377,49 @@ const storageAdapter = {
         return (
           <div className="min-h-screen bg-gradient-to-br from-purple-600 via-blue-600 to-indigo-700 flex items-center justify-center p-4">
             <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full">
+              {!isFirebaseConfigured && (
+                <div className="mb-4 p-4 bg-yellow-100 border-2 border-yellow-400 rounded-lg">
+                  <p className="text-yellow-800 font-bold text-center">⚠️ Firebase ยังไม่ได้ตั้งค่า</p>
+                  <p className="text-yellow-700 text-sm text-center mt-2">ใช้งาน Offline (localStorage)</p>
+                </div>
+              )}
+              
+              {firebaseStatus && (
+                <div className="mb-4 p-3 bg-blue-100 text-blue-800 rounded-lg text-center text-sm font-semibold">
+                  {firebaseStatus}
+                </div>
+              )}
+
               {saveStatus && (
                 <div className="mb-4 p-3 bg-green-100 text-green-800 rounded-lg text-center font-semibold">
                   {saveStatus}
                 </div>
               )}
-              <div className="text-center mb-8">
+
+              <div className="text-center mb-2">
                 <div className="text-6xl mb-4">🏆</div>
                 <h1 className="text-3xl font-bold text-gray-800 mb-2">ระบบให้คะแนนการประกวด</h1>
-                <p className="text-gray-600">เลือกโหมดที่ต้องการ</p>
+                <p className="text-gray-600 text-sm">Event ID: {eventId}</p>
               </div>
 
-              <div className="space-y-4">
+              <div className="space-y-4 mt-6">
                 <button
                   onClick={() => setMode('judge')}
-                  className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-4 rounded-xl font-bold text-lg hover:from-green-600 hover:to-emerald-700 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-1"
+                  className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-4 rounded-xl font-bold text-lg hover:from-green-600 hover:to-emerald-700 transition-all shadow-lg"
                 >
                   👨‍⚖️ กรรมการให้คะแนน
                 </button>
 
                 <button
                   onClick={() => setMode('admin')}
-                  className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white py-4 rounded-xl font-bold text-lg hover:from-blue-600 hover:to-indigo-700 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-1"
+                  className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white py-4 rounded-xl font-bold text-lg hover:from-blue-600 hover:to-indigo-700 transition-all shadow-lg"
                 >
                   ⚙️ ผู้ดูแลระบบ
                 </button>
 
                 <button
                   onClick={() => setMode('results')}
-                  className="w-full bg-gradient-to-r from-purple-500 to-pink-600 text-white py-4 rounded-xl font-bold text-lg hover:from-purple-600 hover:to-pink-700 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-1"
+                  className="w-full bg-gradient-to-r from-purple-500 to-pink-600 text-white py-4 rounded-xl font-bold text-lg hover:from-purple-600 hover:to-pink-700 transition-all shadow-lg"
                 >
                   📊 ดูผลการแข่งขัน
                 </button>
@@ -414,22 +429,18 @@ const storageAdapter = {
         );
       }
 
-      // JUDGE SELECT SCREEN
+      // JUDGE SELECT
       if (mode === 'judge') {
         return (
           <div className="min-h-screen bg-gradient-to-br from-green-400 via-blue-500 to-purple-600 flex items-center justify-center p-4">
             <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full">
-              <button
-                onClick={() => setMode('start')}
-                className="mb-6 text-gray-600 hover:text-gray-800 flex items-center gap-2"
-              >
+              <button onClick={() => setMode('start')} className="mb-6 text-gray-600 hover:text-gray-800">
                 ← กลับ
               </button>
 
               <div className="text-center mb-8">
                 <div className="text-6xl mb-4">👨‍⚖️</div>
                 <h2 className="text-3xl font-bold text-gray-800 mb-2">เลือกชื่อกรรมการ</h2>
-                <p className="text-gray-600">คุณคือใคร?</p>
               </div>
 
               <div className="space-y-3">
@@ -437,7 +448,7 @@ const storageAdapter = {
                   <button
                     key={judge.id}
                     onClick={() => startJudging(judge.id)}
-                    className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white py-4 rounded-xl font-bold text-lg hover:from-blue-600 hover:to-indigo-700 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-1"
+                    className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white py-4 rounded-xl font-bold text-lg hover:from-blue-600 hover:to-indigo-700 transition-all shadow-lg"
                   >
                     {judge.name}
                   </button>
@@ -455,7 +466,7 @@ const storageAdapter = {
         );
       }
 
-      // SCORING SCREEN
+      // SCORING
       if (mode === 'scoring') {
         const entry = entries[currentEntryIndex];
         if (!entry) {
@@ -464,7 +475,6 @@ const storageAdapter = {
               <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full text-center">
                 <div className="text-6xl mb-4">⚠️</div>
                 <h2 className="text-2xl font-bold text-gray-800 mb-4">ไม่พบผลงาน</h2>
-                <p className="text-gray-600 mb-6">กรุณาติดต่อผู้ดูแลระบบ</p>
                 <button
                   onClick={() => setMode('start')}
                   className="bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700"
@@ -502,7 +512,7 @@ const storageAdapter = {
 
                 <div className="w-full bg-gray-200 rounded-full h-3">
                   <div
-                    className="bg-gradient-to-r from-blue-500 to-indigo-600 h-3 rounded-full transition-all duration-500"
+                    className="bg-gradient-to-r from-blue-500 to-indigo-600 h-3 rounded-full transition-all"
                     style={{ width: `${progress}%` }}
                   />
                 </div>
@@ -563,13 +573,13 @@ const storageAdapter = {
                     {totalCurrent} / {totalMax}
                   </div>
                   <p className="text-sm font-semibold">
-                    {allFilled ? '✅ พร้อมบันทึก' : '⚠️ กรอกคะแนนให้ครบทุกหมวด'}
+                    {allFilled ? '✅ พร้อมบันทึก' : '⚠️ กรอกให้ครบทุกหมวด'}
                   </p>
                 </div>
 
                 <button
                   onClick={submitCurrentScore}
-                  className="w-full mt-6 py-5 rounded-xl text-xl font-bold transition-all transform bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-600 hover:to-emerald-700 shadow-xl hover:shadow-2xl hover:-translate-y-1"
+                  className="w-full mt-6 py-5 rounded-xl text-xl font-bold transition-all bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-600 hover:to-emerald-700 shadow-xl"
                 >
                   {currentEntryIndex < entries.length - 1 ? '➡️ บันทึกและถัดไป' : '✅ บันทึกและเสร็จสิ้น'}
                 </button>
@@ -579,7 +589,7 @@ const storageAdapter = {
         );
       }
 
-      // COMPLETE SCREEN
+      // COMPLETE
       if (mode === 'complete') {
         const judge = judges.find(j => j.id === selectedJudge);
         return (
@@ -591,12 +601,9 @@ const storageAdapter = {
               <p className="text-lg text-gray-700 font-semibold mb-8">
                 คุณ {judge?.name}
               </p>
-              <p className="text-gray-600 mb-8">
-                ให้คะแนนครบ {entries.length} ผลงานแล้ว
-              </p>
               <button
                 onClick={() => setMode('start')}
-                className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-8 py-4 rounded-xl font-bold text-lg hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg hover:shadow-xl"
+                className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-8 py-4 rounded-xl font-bold text-lg hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg"
               >
                 กลับหน้าหลัก
               </button>
@@ -605,7 +612,7 @@ const storageAdapter = {
         );
       }
 
-      // ADMIN MODE
+      // ADMIN
       if (mode === 'admin') {
         return (
           <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
@@ -649,7 +656,7 @@ const storageAdapter = {
                               onClick={() => deleteCategory(cat.id)}
                               className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 font-semibold"
                             >
-                              🗑️ ลบประเภท
+                              🗑️ ลบ
                             </button>
                           </div>
                         </div>
@@ -661,14 +668,12 @@ const storageAdapter = {
                               value={crit.name}
                               onChange={(e) => updateCriteria(cat.id, idx, 'name', e.target.value)}
                               className="flex-1 px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
-                              placeholder="ชื่อหมวดคะแนน"
                             />
                             <input
                               type="number"
                               value={crit.maxScore}
                               onChange={(e) => updateCriteria(cat.id, idx, 'maxScore', e.target.value)}
                               className="w-28 px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none text-center font-semibold"
-                              placeholder="คะแนน"
                             />
                             <button
                               onClick={() => deleteCriteria(cat.id, idx)}
@@ -702,7 +707,11 @@ const storageAdapter = {
                           <div key={judge.id} className="bg-white p-4 rounded-lg flex justify-between items-center shadow">
                             <span className="font-semibold text-lg">{idx + 1}. {judge.name}</span>
                             <button
-                              onClick={() => setJudges(judges.filter(j => j.id !== judge.id))}
+                              onClick={() => {
+                                const newJudges = judges.filter(j => j.id !== judge.id);
+                                setJudges(newJudges);
+                                storageAdapter.set('judges', JSON.stringify(newJudges));
+                              }}
                               className="text-red-600 hover:text-red-800 font-semibold"
                             >
                               ลบ
@@ -720,42 +729,45 @@ const storageAdapter = {
                         </button>
                       </div>
                       <div className="space-y-2">
-                        {entries.map((entry, idx) => {
-                          const cat = categories.find(c => c.id === entry.categoryId);
-                          return (
-                            <div key={entry.id} className="bg-white p-4 rounded-lg shadow">
-                              <div className="flex justify-between items-center mb-2">
-                                <span className="font-semibold text-lg">{idx + 1}. {entry.name}</span>
-                                <button
-                                  onClick={() => setEntries(entries.filter(e => e.id !== entry.id))}
-                                  className="text-red-600 hover:text-red-800 font-semibold"
-                                >
-                                  ลบ
-                                </button>
-                              </div>
-                              <select
-                                value={entry.categoryId}
-                                onChange={(e) => {
-                                  setEntries(entries.map(ent => 
-                                    ent.id === entry.id ? { ...ent, categoryId: e.target.value } : ent
-                                  ));
+                        {entries.map((entry, idx) => (
+                          <div key={entry.id} className="bg-white p-4 rounded-lg shadow">
+                            <div className="flex justify-between items-center mb-2">
+                              <span className="font-semibold text-lg">{idx + 1}. {entry.name}</span>
+                              <button
+                                onClick={() => {
+                                  const newEntries = entries.filter(e => e.id !== entry.id);
+                                  setEntries(newEntries);
+                                  storageAdapter.set('entries', JSON.stringify(newEntries));
                                 }}
-                                className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:outline-none"
+                                className="text-red-600 hover:text-red-800 font-semibold"
                               >
-                                {categories.map(c => (
-                                  <option key={c.id} value={c.id}>{c.name}</option>
-                                ))}
-                              </select>
+                                ลบ
+                              </button>
                             </div>
-                          );
-                        })}
+                            <select
+                              value={entry.categoryId}
+                              onChange={(e) => {
+                                const newEntries = entries.map(ent => 
+                                  ent.id === entry.id ? { ...ent, categoryId: e.target.value } : ent
+                                );
+                                setEntries(newEntries);
+                                storageAdapter.set('entries', JSON.stringify(newEntries));
+                              }}
+                              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:outline-none"
+                            >
+                              {categories.map(c => (
+                                <option key={c.id} value={c.id}>{c.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   </div>
 
                   <button
                     onClick={saveData}
-                    className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-5 rounded-xl text-xl font-bold hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg hover:shadow-xl"
+                    className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-5 rounded-xl text-xl font-bold hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg"
                   >
                     💾 บันทึกการตั้งค่า
                   </button>
@@ -766,7 +778,7 @@ const storageAdapter = {
         );
       }
 
-      // RESULTS MODE
+      // RESULTS
       if (mode === 'results') {
         return (
           <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-50 p-4">
@@ -866,7 +878,7 @@ const storageAdapter = {
                                           ))}
                                         </div>
                                         <div className={`text-xs mt-2 ${idx < 3 ? 'text-white opacity-75' : 'text-gray-500'}`}>
-                                          ⏰ {date.toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' })} {date.toLocaleTimeString('th-TH')}
+                                          ⏰ {date.toLocaleDateString('th-TH')} {date.toLocaleTimeString('th-TH')}
                                         </div>
                                       </div>
                                     );
@@ -890,15 +902,7 @@ const storageAdapter = {
     }
 
     const root = ReactDOM.createRoot(document.getElementById('root'));
-root.render(React.createElement(App));
-
+    root.render(React.createElement(App));
   </script>
 </body>
 </html>
-
-
-
-
-
-
-
