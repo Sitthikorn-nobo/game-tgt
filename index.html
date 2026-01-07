@@ -30,31 +30,67 @@
       const [selectedJudge, setSelectedJudge] = useState('');
       const [currentEntryIndex, setCurrentEntryIndex] = useState(0);
       const [currentScore, setCurrentScore] = useState({});
+      const [loading, setLoading] = useState(true);
+      const [saveStatus, setSaveStatus] = useState('');
 
-      // Load data on startup
+      // ✅ โหลดข้อมูลเมื่อเริ่มต้น
       useEffect(() => {
         loadData();
       }, []);
 
+      // ✅ บันทึกอัตโนมัติทุกครั้งที่มีการเปลี่ยนแปลง
+      useEffect(() => {
+        if (!loading) {
+          autoSave();
+        }
+      }, [categories, judges, entries, scores]);
+
       const loadData = async () => {
         try {
-          const [catResult, judgeResult, entryResult, scoreResult] = await Promise.all([
+          setLoading(true);
+          const results = await Promise.allSettled([
             window.storage.get('categories'),
             window.storage.get('judges'),
             window.storage.get('entries'),
             window.storage.get('scores')
           ]);
 
-          if (catResult?.value) setCategories(JSON.parse(catResult.value));
-          if (judgeResult?.value) setJudges(JSON.parse(judgeResult.value));
-          if (entryResult?.value) setEntries(JSON.parse(entryResult.value));
-          if (scoreResult?.value) setScores(JSON.parse(scoreResult.value));
+          if (results[0].status === 'fulfilled' && results[0].value?.value) {
+            setCategories(JSON.parse(results[0].value.value));
+          } else {
+            // ตั้งค่าเริ่มต้น
+            setCategories([{
+              id: 'cat1',
+              name: 'สิ่งประดิษฐ์ทั่วไป',
+              criteria: [
+                { id: `crit_${Date.now()}_1`, name: 'การนำเสนอ', maxScore: 20 },
+                { id: `crit_${Date.now()}_2`, name: 'ความคิดสร้างสรรค์', maxScore: 20 },
+                { id: `crit_${Date.now()}_3`, name: 'ความสวยงาม', maxScore: 20 },
+                { id: `crit_${Date.now()}_4`, name: 'ความเป็นประโยชน์', maxScore: 20 },
+                { id: `crit_${Date.now()}_5`, name: 'ฝีมือและเทคนิค', maxScore: 20 }
+              ]
+            }]);
+          }
+
+          if (results[1].status === 'fulfilled' && results[1].value?.value) {
+            setJudges(JSON.parse(results[1].value.value));
+          }
+
+          if (results[2].status === 'fulfilled' && results[2].value?.value) {
+            setEntries(JSON.parse(results[2].value.value));
+          }
+
+          if (results[3].status === 'fulfilled' && results[3].value?.value) {
+            setScores(JSON.parse(results[3].value.value));
+          }
         } catch (error) {
-          console.log('Loading data...', error);
+          console.error('โหลดข้อมูลล้มเหลว:', error);
+        } finally {
+          setLoading(false);
         }
       };
 
-      const saveData = async () => {
+      const autoSave = async () => {
         try {
           await Promise.all([
             window.storage.set('categories', JSON.stringify(categories)),
@@ -62,30 +98,32 @@
             window.storage.set('entries', JSON.stringify(entries)),
             window.storage.set('scores', JSON.stringify(scores))
           ]);
+          setSaveStatus('✅ บันทึกอัตโนมัติสำเร็จ');
+          setTimeout(() => setSaveStatus(''), 2000);
+        } catch (error) {
+          console.error('บันทึกอัตโนมัติล้มเหลว:', error);
+          setSaveStatus('⚠️ บันทึกล้มเหลว');
+        }
+      };
+
+      const saveData = async () => {
+        try {
+          setSaveStatus('กำลังบันทึก...');
+          await Promise.all([
+            window.storage.set('categories', JSON.stringify(categories)),
+            window.storage.set('judges', JSON.stringify(judges)),
+            window.storage.set('entries', JSON.stringify(entries)),
+            window.storage.set('scores', JSON.stringify(scores))
+          ]);
+          setSaveStatus('✅ บันทึกสำเร็จ!');
           alert('✅ บันทึกข้อมูลสำเร็จ!');
         } catch (error) {
+          console.error('บันทึกข้อมูลล้มเหลว:', error);
+          setSaveStatus('❌ บันทึกล้มเหลว');
           alert('❌ เกิดข้อผิดพลาด: ' + error.message);
         }
       };
 
-      // Initialize default data
-      useEffect(() => {
-        if (categories.length === 0) {
-          setCategories([{
-            id: 'cat1',
-            name: 'สิ่งประดิษฐ์ทั่วไป',
-            criteria: [
-              { id: `crit_${Date.now()}_1`, name: 'การนำเสนอ', maxScore: 20 },
-              { id: `crit_${Date.now()}_2`, name: 'ความคิดสร้างสรรค์', maxScore: 20 },
-              { id: `crit_${Date.now()}_3`, name: 'ความสวยงาม', maxScore: 20 },
-              { id: `crit_${Date.now()}_4`, name: 'ความเป็นประโยชน์', maxScore: 20 },
-              { id: `crit_${Date.now()}_5`, name: 'ฝีมือและเทคนิค', maxScore: 20 }
-            ]
-          }]);
-        }
-      }, []);
-
-      // Admin functions
       const addCategory = () => {
         const name = prompt('ชื่อประเภท:');
         if (name) {
@@ -97,24 +135,19 @@
         }
       };
 
-      // ✅ เพิ่มฟังก์ชันลบประเภทอย่างถาวร
       const deleteCategory = async (catId) => {
-        if (!confirm('⚠️ คุณแน่ใจหรือไม่ที่จะลบประเภทนี้? ข้อมูลทั้งหมดที่เกี่ยวข้องจะถูกลบด้วย')) return;
+        if (!confirm('⚠️ คุณแน่ใจหรือไม่ที่จะลบประเภทนี้?\n\nการลบจะทำให้:\n- ประเภทนี้หายไป\n- ผลงานในประเภทนี้ถูกลบ\n- คะแนนทั้งหมดถูกลบ')) return;
         
-        // ลบประเภท
         const newCategories = categories.filter(c => c.id !== catId);
         setCategories(newCategories);
         
-        // ลบผลงานที่อยู่ในประเภทนี้
         const newEntries = entries.filter(e => e.categoryId !== catId);
         setEntries(newEntries);
         
-        // ลบคะแนนของผลงานที่ถูกลบ
         const deletedEntryIds = entries.filter(e => e.categoryId === catId).map(e => e.id);
         const newScores = scores.filter(s => !deletedEntryIds.includes(s.entryId));
         setScores(newScores);
         
-        // บันทึกลง storage ทันที
         try {
           await Promise.all([
             window.storage.set('categories', JSON.stringify(newCategories)),
@@ -169,15 +202,12 @@
         if (name) setJudges([...judges, { id: `j${Date.now()}`, name }]);
       };
 
-      // ✅ ฟังก์ชันเพิ่มผลงาน - ให้ผู้ใช้เลือกประเภทได้
       const addEntry = () => {
         const name = prompt('ชื่อผลงาน/ทีม:');
         if (name && categories.length > 0) {
-          // ถ้ามีแค่ 1 ประเภท ใช้ประเภทนั้นเลย
           if (categories.length === 1) {
             setEntries([...entries, { id: `e${Date.now()}`, name, categoryId: categories[0].id }]);
           } else {
-            // ให้เลือกประเภท
             const categoryOptions = categories.map((c, i) => `${i + 1}. ${c.name}`).join('\n');
             const selection = prompt(`เลือกประเภท (กรอกหมายเลข 1-${categories.length}):\n${categoryOptions}`);
             const index = parseInt(selection) - 1;
@@ -200,12 +230,10 @@
         setMode('scoring');
       };
 
-      // ✅ ปรับฟังก์ชันส่งคะแนน - ไม่บังคับต้องครบ 100
       const submitCurrentScore = async () => {
         const entry = entries[currentEntryIndex];
         const category = categories.find(c => c.id === entry.categoryId);
         
-        // ตรวจสอบว่ากรอกคะแนนครบทุกหมวดหรือไม่
         const allFilled = category.criteria.every((_, idx) => currentScore[idx] !== undefined && currentScore[idx] !== '');
         
         if (!allFilled) {
@@ -225,14 +253,12 @@
         const updatedScores = [...scores, newScore];
         setScores(updatedScores);
         
-        // Auto save
         try {
           await window.storage.set('scores', JSON.stringify(updatedScores));
         } catch (error) {
-          console.error('Save error:', error);
+          console.error('บันทึกคะแนนล้มเหลว:', error);
         }
 
-        // Move to next entry
         if (currentEntryIndex < entries.length - 1) {
           setCurrentEntryIndex(currentEntryIndex + 1);
           setCurrentScore({});
@@ -257,11 +283,26 @@
         }).sort((a, b) => b.avgScore - a.avgScore);
       };
 
+      if (loading) {
+        return (
+          <div className="min-h-screen bg-gradient-to-br from-purple-600 via-blue-600 to-indigo-700 flex items-center justify-center">
+            <div className="text-white text-2xl font-bold">
+              <div className="animate-pulse">🔄 กำลังโหลดข้อมูล...</div>
+            </div>
+          </div>
+        );
+      }
+
       // START SCREEN
       if (mode === 'start') {
         return (
           <div className="min-h-screen bg-gradient-to-br from-purple-600 via-blue-600 to-indigo-700 flex items-center justify-center p-4">
             <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full">
+              {saveStatus && (
+                <div className="mb-4 p-3 bg-green-100 text-green-800 rounded-lg text-center font-semibold">
+                  {saveStatus}
+                </div>
+              )}
               <div className="text-center mb-8">
                 <div className="text-6xl mb-4">🏆</div>
                 <h1 className="text-3xl font-bold text-gray-800 mb-2">ระบบให้คะแนนการประกวด</h1>
@@ -362,14 +403,11 @@
         const totalMax = category.criteria.reduce((sum, c) => sum + c.maxScore, 0);
         const totalCurrent = Object.values(currentScore).reduce((sum, v) => sum + (parseInt(v) || 0), 0);
         const progress = ((currentEntryIndex + 1) / entries.length) * 100;
-        
-        // ✅ ตรวจสอบว่ากรอกครบทุกหมวดหรือไม่ (แต่ไม่บังคับต้องเต็ม 100)
         const allFilled = category.criteria.every((_, idx) => currentScore[idx] !== undefined && currentScore[idx] !== '');
 
         return (
           <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
             <div className="max-w-4xl mx-auto">
-              {/* Header */}
               <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
                 <div className="flex justify-between items-center mb-4">
                   <div>
@@ -392,7 +430,6 @@
                 </div>
               </div>
 
-              {/* Entry Info */}
               <div className="bg-gradient-to-br from-purple-500 to-indigo-600 rounded-2xl shadow-xl p-8 mb-6 text-white">
                 <div className="text-center">
                   <div className="text-5xl mb-4">🎨</div>
@@ -401,7 +438,6 @@
                 </div>
               </div>
 
-              {/* Scoring Form */}
               <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
                 <h3 className="text-2xl font-bold text-gray-800 mb-6 text-center">
                   ให้คะแนนแต่ละหมวด
@@ -439,7 +475,6 @@
                   ))}
                 </div>
 
-                {/* Total Score Display */}
                 <div className={`mt-8 p-6 rounded-2xl text-center transition-all ${
                   allFilled
                     ? 'bg-gradient-to-r from-green-400 to-emerald-500 text-white shadow-lg' 
@@ -454,7 +489,6 @@
                   </p>
                 </div>
 
-                {/* Submit Button */}
                 <button
                   onClick={submitCurrentScore}
                   className="w-full mt-6 py-5 rounded-xl text-xl font-bold transition-all transform bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-600 hover:to-emerald-700 shadow-xl hover:shadow-2xl hover:-translate-y-1"
@@ -499,18 +533,24 @@
           <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
             <div className="max-w-6xl mx-auto">
               <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
-                <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white flex justify-between items-center">
-                  <h1 className="text-3xl font-bold">⚙️ ผู้ดูแลระบบ</h1>
-                  <button
-                    onClick={() => setMode('start')}
-                    className="bg-white text-blue-600 px-6 py-2 rounded-lg font-semibold hover:bg-blue-50"
-                  >
-                    ← กลับ
-                  </button>
+                <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white">
+                  <div className="flex justify-between items-center">
+                    <h1 className="text-3xl font-bold">⚙️ ผู้ดูแลระบบ</h1>
+                    <button
+                      onClick={() => setMode('start')}
+                      className="bg-white text-blue-600 px-6 py-2 rounded-lg font-semibold hover:bg-blue-50"
+                    >
+                      ← กลับ
+                    </button>
+                  </div>
+                  {saveStatus && (
+                    <div className="mt-3 p-2 bg-white/20 rounded-lg text-center text-sm">
+                      {saveStatus}
+                    </div>
+                  )}
                 </div>
 
                 <div className="p-6 space-y-6">
-                  {/* Categories */}
                   <div className="bg-blue-50 p-6 rounded-xl">
                     <div className="flex justify-between items-center mb-4">
                       <h2 className="text-2xl font-bold text-blue-900">📋 ประเภทการประกวด</h2>
@@ -571,7 +611,6 @@
                     ))}
                   </div>
 
-                  {/* Judges and Entries */}
                   <div className="grid md:grid-cols-2 gap-6">
                     <div className="bg-green-50 p-6 rounded-xl">
                       <div className="flex justify-between items-center mb-4">
@@ -619,8 +658,8 @@
                               <select
                                 value={entry.categoryId}
                                 onChange={(e) => {
-                                  setEntries(entries.map(e => 
-                                    e.id === entry.id ? { ...e, categoryId: e.target.value } : e
+                                  setEntries(entries.map(ent => 
+                                    ent.id === entry.id ? { ...ent, categoryId: e.target.value } : ent
                                   ));
                                 }}
                                 className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:outline-none"
@@ -636,7 +675,6 @@
                     </div>
                   </div>
 
-                  {/* Save Button */}
                   <button
                     onClick={saveData}
                     className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-5 rounded-xl text-xl font-bold hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg hover:shadow-xl"
