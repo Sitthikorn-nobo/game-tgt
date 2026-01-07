@@ -16,61 +16,45 @@
 </head>
 <body>
   <div id="root"></div>
-  <script>
-  // ✅ Polyfill ให้ window.storage ใช้งานได้บน GitHub Pages ด้วย localStorage
-  // (ไม่เปลี่ยน logic เดิมของคุณ แค่ทำให้ get/set มีจริง)
-  window.storage = {
-    get: (key) => {
-      const value = localStorage.getItem(key);
-      // ให้คืนรูปแบบเดียวกับที่โค้ดเดิมคาดหวัง: { value: "..." }
-      return Promise.resolve(value === null ? null : { value });
-    },
-    set: (key, value) => {
-      // โค้ดเดิมส่งเป็น string (JSON.stringify) อยู่แล้ว
-      localStorage.setItem(key, value);
-      return Promise.resolve(true);
-    }
-  };
-</script>
 
   <script type="text/babel">
     const { useState, useEffect } = React;
 
     function App() {
-      const [mode, setMode] = useState('start'); // start, admin, judge, results
+      const [mode, setMode] = useState('start');
       const [categories, setCategories] = useState([]);
       const [judges, setJudges] = useState([]);
       const [entries, setEntries] = useState([]);
       const [scores, setScores] = useState([]);
       
-      // Judge mode states
       const [selectedJudge, setSelectedJudge] = useState('');
       const [currentEntryIndex, setCurrentEntryIndex] = useState(0);
       const [currentScore, setCurrentScore] = useState({});
 
-      // Load data
+      // Load data on startup
       useEffect(() => {
         loadData();
       }, []);
 
       const loadData = async () => {
-  try {
-    const [catResult, judgeResult, entryResult, scoreResult] = await Promise.all([
-      window.storage.get('categories').catch(() => null),
-      window.storage.get('judges').catch(() => null),
-      window.storage.get('entries').catch(() => null),
-      window.storage.get('scores').catch(() => null)
-    ]);
+        try {
+          const [catResult, judgeResult, entryResult, scoreResult] = await Promise.all([
+            window.storage.get('categories'),
+            window.storage.get('judges'),
+            window.storage.get('entries'),
+            window.storage.get('scores')
+          ]);
 
-    if (catResult?.value) setCategories(JSON.parse(catResult.value));
-    if (judgeResult?.value) setJudges(JSON.parse(judgeResult.value));
-    if (entryResult?.value) setEntries(JSON.parse(entryResult.value));
-    if (scoreResult?.value) setScores(JSON.parse(scoreResult.value));
-  } catch (error) {
-    console.log('Loading default data', error);
-  }
-};
-     const saveData = async () => {
+          if (catResult?.value) setCategories(JSON.parse(catResult.value));
+          if (judgeResult?.value) setJudges(JSON.parse(judgeResult.value));
+          if (entryResult?.value) setEntries(JSON.parse(entryResult.value));
+          if (scoreResult?.value) setScores(JSON.parse(scoreResult.value));
+        } catch (error) {
+          console.log('Loading data...', error);
+        }
+      };
+
+      const saveData = async () => {
         try {
           await Promise.all([
             window.storage.set('categories', JSON.stringify(categories)),
@@ -80,7 +64,7 @@
           ]);
           alert('✅ บันทึกข้อมูลสำเร็จ!');
         } catch (error) {
-          alert('❌ เกิดข้อผิดพลาดในการบันทึก');
+          alert('❌ เกิดข้อผิดพลาด: ' + error.message);
         }
       };
 
@@ -90,14 +74,13 @@
           setCategories([{
             id: 'cat1',
             name: 'สิ่งประดิษฐ์ทั่วไป',
-           criteria: [
-  { id: `crit_${Date.now()}_1`, name: 'การนำเสนอ', maxScore: 20 },
-  { id: `crit_${Date.now()}_2`, name: 'ความคิดสร้างสรรค์', maxScore: 20 },
-  { id: `crit_${Date.now()}_3`, name: 'ความสวยงาม', maxScore: 20 },
-  { id: `crit_${Date.now()}_4`, name: 'ความเป็นประโยชน์', maxScore: 20 },
-  { id: `crit_${Date.now()}_5`, name: 'ฝีมือและเทคนิค', maxScore: 20 }
-]
-
+            criteria: [
+              { id: `crit_${Date.now()}_1`, name: 'การนำเสนอ', maxScore: 20 },
+              { id: `crit_${Date.now()}_2`, name: 'ความคิดสร้างสรรค์', maxScore: 20 },
+              { id: `crit_${Date.now()}_3`, name: 'ความสวยงาม', maxScore: 20 },
+              { id: `crit_${Date.now()}_4`, name: 'ความเป็นประโยชน์', maxScore: 20 },
+              { id: `crit_${Date.now()}_5`, name: 'ฝีมือและเทคนิค', maxScore: 20 }
+            ]
           }]);
         }
       }, []);
@@ -109,9 +92,38 @@
           setCategories([...categories, {
             id: `cat${Date.now()}`,
             name,
-            criteria: [...cat.criteria, { id: `crit_${Date.now()}`, name: `หมวด ${cat.criteria.length + 1}`, maxScore: 0 }]
-
+            criteria: [{ id: `crit_${Date.now()}`, name: 'หมวดคะแนน 1', maxScore: 100 }]
           }]);
+        }
+      };
+
+      // ✅ เพิ่มฟังก์ชันลบประเภทอย่างถาวร
+      const deleteCategory = async (catId) => {
+        if (!confirm('⚠️ คุณแน่ใจหรือไม่ที่จะลบประเภทนี้? ข้อมูลทั้งหมดที่เกี่ยวข้องจะถูกลบด้วย')) return;
+        
+        // ลบประเภท
+        const newCategories = categories.filter(c => c.id !== catId);
+        setCategories(newCategories);
+        
+        // ลบผลงานที่อยู่ในประเภทนี้
+        const newEntries = entries.filter(e => e.categoryId !== catId);
+        setEntries(newEntries);
+        
+        // ลบคะแนนของผลงานที่ถูกลบ
+        const deletedEntryIds = entries.filter(e => e.categoryId === catId).map(e => e.id);
+        const newScores = scores.filter(s => !deletedEntryIds.includes(s.entryId));
+        setScores(newScores);
+        
+        // บันทึกลง storage ทันที
+        try {
+          await Promise.all([
+            window.storage.set('categories', JSON.stringify(newCategories)),
+            window.storage.set('entries', JSON.stringify(newEntries)),
+            window.storage.set('scores', JSON.stringify(newScores))
+          ]);
+          alert('✅ ลบประเภทสำเร็จ!');
+        } catch (error) {
+          alert('❌ เกิดข้อผิดพลาดในการบันทึก');
         }
       };
 
@@ -120,8 +132,7 @@
           if (cat.id === catId) {
             return {
               ...cat,
-              criteria: [{ id: `crit_${Date.now()}`, name: 'หมวดคะแนน 1', maxScore: 100 }]
-
+              criteria: [...cat.criteria, { id: `crit_${Date.now()}`, name: 'หมวดคะแนนใหม่', maxScore: 10 }]
             };
           }
           return cat;
@@ -158,14 +169,30 @@
         if (name) setJudges([...judges, { id: `j${Date.now()}`, name }]);
       };
 
+      // ✅ ฟังก์ชันเพิ่มผลงาน - ให้ผู้ใช้เลือกประเภทได้
       const addEntry = () => {
         const name = prompt('ชื่อผลงาน/ทีม:');
         if (name && categories.length > 0) {
-          setEntries([...entries, { id: `e${Date.now()}`, name, categoryId: categories[0].id }]);
+          // ถ้ามีแค่ 1 ประเภท ใช้ประเภทนั้นเลย
+          if (categories.length === 1) {
+            setEntries([...entries, { id: `e${Date.now()}`, name, categoryId: categories[0].id }]);
+          } else {
+            // ให้เลือกประเภท
+            const categoryOptions = categories.map((c, i) => `${i + 1}. ${c.name}`).join('\n');
+            const selection = prompt(`เลือกประเภท (กรอกหมายเลข 1-${categories.length}):\n${categoryOptions}`);
+            const index = parseInt(selection) - 1;
+            
+            if (index >= 0 && index < categories.length) {
+              setEntries([...entries, { id: `e${Date.now()}`, name, categoryId: categories[index].id }]);
+            } else {
+              alert('❌ เลือกประเภทไม่ถูกต้อง');
+            }
+          }
+        } else if (categories.length === 0) {
+          alert('❌ กรุณาเพิ่มประเภทก่อน');
         }
       };
 
-      // Judge mode functions
       const startJudging = (judgeId) => {
         setSelectedJudge(judgeId);
         setCurrentEntryIndex(0);
@@ -173,13 +200,19 @@
         setMode('scoring');
       };
 
+      // ✅ ปรับฟังก์ชันส่งคะแนน - ไม่บังคับต้องครบ 100
       const submitCurrentScore = async () => {
         const entry = entries[currentEntryIndex];
         const category = categories.find(c => c.id === entry.categoryId);
-        const totalMax = category.criteria.reduce((sum, c) => sum + c.maxScore, 0);
-        const totalCurrent = Object.values(currentScore).reduce((sum, v) => sum + (parseInt(v) || 0), 0);
-
-       
+        
+        // ตรวจสอบว่ากรอกคะแนนครบทุกหมวดหรือไม่
+        const allFilled = category.criteria.every((_, idx) => currentScore[idx] !== undefined && currentScore[idx] !== '');
+        
+        if (!allFilled) {
+          if (!confirm('⚠️ คุณยังกรอกคะแนนไม่ครบทุกหมวด ต้องการบันทึกต่อหรือไม่?')) {
+            return;
+          }
+        }
 
         const newScore = {
           id: `s${Date.now()}`,
@@ -192,7 +225,7 @@
         const updatedScores = [...scores, newScore];
         setScores(updatedScores);
         
-        // Auto save after each submission
+        // Auto save
         try {
           await window.storage.set('scores', JSON.stringify(updatedScores));
         } catch (error) {
@@ -329,6 +362,9 @@
         const totalMax = category.criteria.reduce((sum, c) => sum + c.maxScore, 0);
         const totalCurrent = Object.values(currentScore).reduce((sum, v) => sum + (parseInt(v) || 0), 0);
         const progress = ((currentEntryIndex + 1) / entries.length) * 100;
+        
+        // ✅ ตรวจสอบว่ากรอกครบทุกหมวดหรือไม่ (แต่ไม่บังคับต้องเต็ม 100)
+        const allFilled = category.criteria.every((_, idx) => currentScore[idx] !== undefined && currentScore[idx] !== '');
 
         return (
           <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
@@ -348,7 +384,6 @@
                   </div>
                 </div>
 
-                {/* Progress Bar */}
                 <div className="w-full bg-gray-200 rounded-full h-3">
                   <div
                     className="bg-gradient-to-r from-blue-500 to-indigo-600 h-3 rounded-full transition-all duration-500"
@@ -382,7 +417,7 @@
                             type="number"
                             min="0"
                             max={crit.maxScore}
-                            value={currentScore[idx] || 0}
+                            value={currentScore[idx] || ''}
                             onChange={(e) => {
                               const val = Math.min(parseInt(e.target.value) || 0, crit.maxScore);
                               setCurrentScore({ ...currentScore, [idx]: val });
@@ -406,7 +441,7 @@
 
                 {/* Total Score Display */}
                 <div className={`mt-8 p-6 rounded-2xl text-center transition-all ${
-                  totalCurrent === totalMax 
+                  allFilled
                     ? 'bg-gradient-to-r from-green-400 to-emerald-500 text-white shadow-lg' 
                     : 'bg-gradient-to-r from-yellow-100 to-orange-100 border-2 border-yellow-400'
                 }`}>
@@ -415,22 +450,16 @@
                     {totalCurrent} / {totalMax}
                   </div>
                   <p className="text-sm font-semibold">
-  ✅ กดบันทึกได้เลย (ไม่จำเป็นต้องครบ {totalMax})
-</p>
-
+                    {allFilled ? '✅ พร้อมบันทึก' : '⚠️ กรอกคะแนนให้ครบทุกหมวด'}
+                  </p>
                 </div>
 
-                {/* Next Button */}
+                {/* Submit Button */}
                 <button
                   onClick={submitCurrentScore}
-                  disabled={totalCurrent !== totalMax}
-                  className={`w-full mt-6 py-5 rounded-xl text-xl font-bold transition-all transform ${
-                    totalCurrent === totalMax
-                      ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-600 hover:to-emerald-700 shadow-xl hover:shadow-2xl hover:-translate-y-1'
-                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  }`}
+                  className="w-full mt-6 py-5 rounded-xl text-xl font-bold transition-all transform bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:from-green-600 hover:to-emerald-700 shadow-xl hover:shadow-2xl hover:-translate-y-1"
                 >
-                  {currentEntryIndex < entries.length - 1 ? '➡️ ถัดไป' : '✅ เสร็จสิ้น'}
+                  {currentEntryIndex < entries.length - 1 ? '➡️ บันทึกและถัดไป' : '✅ บันทึกและเสร็จสิ้น'}
                 </button>
               </div>
             </div>
@@ -494,16 +523,21 @@
                       <div key={cat.id} className="bg-white p-6 rounded-xl mb-4 shadow">
                         <div className="flex justify-between items-center mb-4">
                           <h3 className="font-bold text-xl">{cat.name}</h3>
-                          <span className={`px-4 py-2 rounded-full text-sm font-bold ${
-                            getTotalScore(cat.id) === 100 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                          }`}>
-                            รวม: {getTotalScore(cat.id)}/100
-                          </span>
+                          <div className="flex gap-2 items-center">
+                            <span className="px-4 py-2 rounded-full text-sm font-bold bg-blue-100 text-blue-800">
+                              รวม: {getTotalScore(cat.id)} คะแนน
+                            </span>
+                            <button
+                              onClick={() => deleteCategory(cat.id)}
+                              className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 font-semibold"
+                            >
+                              🗑️ ลบประเภท
+                            </button>
+                          </div>
                         </div>
 
                         {cat.criteria.map((crit, idx) => (
-                            <div key={crit.id || idx} className="flex gap-2 mb-3">
-
+                          <div key={crit.id || idx} className="flex gap-2 mb-3">
                             <input
                               type="text"
                               value={crit.name}
@@ -683,7 +717,6 @@
                                 </div>
                               </div>
 
-                              {/* Score Details */}
                               {result.details.length > 0 && (
                                 <div className="mt-4 space-y-3">
                                   <p className={`font-semibold ${idx < 3 ? 'text-white opacity-90' : 'text-gray-700'}`}>
@@ -744,7 +777,3 @@
   </script>
 </body>
 </html>
-
-
-
-
