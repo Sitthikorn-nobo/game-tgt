@@ -26,7 +26,6 @@
     const { useState, useEffect } = React;
 
     // ===============================
-    // 🔥 Firebase Configuration
     // ===============================
     // 👉 แทนที่ค่าเหล่านี้ด้วย Config จาก Firebase Console
       const firebaseConfig = {
@@ -129,7 +128,7 @@
 
       useEffect(() => {
         if (isFirebaseConfigured && db) {
-          setFirebaseStatus('🔥 Firebase: เชื่อมต่อแล้ว');
+          setFirebaseStatus('');
         } else {
           setFirebaseStatus('⚠️ ใช้งานแบบ Offline (localStorage)');
         }
@@ -906,3 +905,4 @@
   </script>
 </body>
 </html>
+
