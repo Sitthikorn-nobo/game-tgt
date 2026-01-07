@@ -20,6 +20,12 @@
   <script type="text/babel">
     const { useState, useEffect } = React;
     // ✅ Storage Adapter (กันพังทั้งบนมือถือ / GitHub Pages / QR / ไม่มี window.storage)
+    // ===============================
+// 🌐 Google Sheet API + Event
+// ===============================
+const API_URL = "https://script.google.com/macros/s/AKfycbw56eIuycPxy1cSz1vh2gv2sKGdSJ3fCYfs9dFIk3Z8tjHfsuzUrM3BLD31Mrp1KQ4l/exec";
+const params = new URLSearchParams(window.location.search);
+const eventId = params.get("eventId") || ""; // ถ้ามี = โหมดแชร์ข้ามเครื่อ
 const storage = {
   get: async (key) => {
     try {
@@ -78,10 +84,36 @@ const storage = {
         }
       }, [categories, judges, entries, scores]);
 
-     const loadData = async () => {
+    const loadData = async () => {
   try {
     setLoading(true);
 
+    // 🔵 ถ้ามี eventId → โหลดจาก Google Sheet (แชร์ข้ามเครื่อง/QR)
+    if (eventId) {
+      const res = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ action: "load", eventId })
+      });
+      const json = await res.json();
+
+      if (json.ok && json.payload) {
+        setCategories(json.payload.categories || []);
+        setJudges(json.payload.judges || []);
+        setEntries(json.payload.entries || []);
+        setScores(json.payload.scores || []);
+        return;
+      }
+
+      // ถ้า eventId ไม่เจอ → เริ่มว่างๆ
+      setCategories([]);
+      setJudges([]);
+      setEntries([]);
+      setScores([]);
+      return;
+    }
+
+    // 🟢 ไม่มี eventId → โหลดจาก localStorage เหมือนเดิม
     const [catStr, judgeStr, entryStr, scoreStr] = await Promise.all([
       storage.get('categories'),
       storage.get('judges'),
@@ -89,9 +121,8 @@ const storage = {
       storage.get('scores'),
     ]);
 
-    if (catStr) {
-      setCategories(JSON.parse(catStr));
-    } else {
+    if (catStr) setCategories(JSON.parse(catStr));
+    else {
       setCategories([{
         id: 'cat1',
         name: 'สิ่งประดิษฐ์ทั่วไป',
@@ -108,7 +139,6 @@ const storage = {
     if (judgeStr) setJudges(JSON.parse(judgeStr));
     if (entryStr) setEntries(JSON.parse(entryStr));
     if (scoreStr) setScores(JSON.parse(scoreStr));
-
   } catch (error) {
     console.error('โหลดข้อมูลล้มเหลว:', error);
   } finally {
@@ -134,22 +164,42 @@ const storage = {
       };
 
       const saveData = async () => {
-        try {
-          setSaveStatus('กำลังบันทึก...');
-          await Promise.all([
-            window.storage.set('categories', JSON.stringify(categories)),
-            window.storage.set('judges', JSON.stringify(judges)),
-            window.storage.set('entries', JSON.stringify(entries)),
-            window.storage.set('scores', JSON.stringify(scores))
-          ]);
-          setSaveStatus('✅ บันทึกสำเร็จ!');
-          alert('✅ บันทึกข้อมูลสำเร็จ!');
-        } catch (error) {
-          console.error('บันทึกข้อมูลล้มเหลว:', error);
-          setSaveStatus('❌ บันทึกล้มเหลว');
-          alert('❌ เกิดข้อผิดพลาด: ' + error.message);
-        }
-      };
+  try {
+    setSaveStatus('กำลังบันทึก...');
+
+    // 🔵 ถ้ามี eventId → เซฟขึ้น Google Sheet
+    if (eventId) {
+      const payload = { categories, judges, entries, scores };
+      const res = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ action: "save", eventId, payload })
+      });
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error || "save failed");
+
+      setSaveStatus('✅ บันทึกสำเร็จ!');
+      alert('✅ บันทึกข้อมูลสำเร็จ!');
+      return;
+    }
+
+    // 🟢 ไม่มี eventId → เซฟ local เหมือนเดิม
+    await Promise.all([
+      storage.set('categories', JSON.stringify(categories)),
+      storage.set('judges', JSON.stringify(judges)),
+      storage.set('entries', JSON.stringify(entries)),
+      storage.set('scores', JSON.stringify(scores))
+    ]);
+
+    setSaveStatus('✅ บันทึกสำเร็จ!');
+    alert('✅ บันทึกข้อมูลสำเร็จ!');
+  } catch (error) {
+    console.error('บันทึกข้อมูลล้มเหลว:', error);
+    setSaveStatus('❌ บันทึกล้มเหลว');
+    alert('❌ เกิดข้อผิดพลาด: ' + error.message);
+  }
+};
+
 
       const addCategory = () => {
         const name = prompt('ชื่อประเภท:');
@@ -176,16 +226,15 @@ const storage = {
         setScores(newScores);
         
         try {
-          await Promise.all([
-            window.storage.set('categories', JSON.stringify(newCategories)),
-            window.storage.set('entries', JSON.stringify(newEntries)),
-            window.storage.set('scores', JSON.stringify(newScores))
-          ]);
-          alert('✅ ลบประเภทสำเร็จ!');
-        } catch (error) {
-          alert('❌ เกิดข้อผิดพลาดในการบันทึก');
-        }
-      };
+  await Promise.all([
+    storage.set('categories', JSON.stringify(newCategories)),
+    storage.set('entries', JSON.stringify(newEntries)),
+    storage.set('scores', JSON.stringify(newScores))
+  ]);
+  alert('✅ ลบประเภทสำเร็จ!');
+} catch (error) {
+  alert('❌ เกิดข้อผิดพลาดในการบันทึก');
+}
 
       const addCriteria = (catId) => {
         setCategories(categories.map(cat => {
@@ -842,4 +891,5 @@ const storage = {
   </script>
 </body>
 </html>
+
 
