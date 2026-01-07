@@ -25,24 +25,36 @@
 // ===============================
 const API_URL = "https://script.google.com/macros/s/AKfycbw56eIuycPxy1cSz1vh2gv2sKGdSJ3fCYfs9dFIk3Z8tjHfsuzUrM3BLD31Mrp1KQ4l/exec";
 const params = new URLSearchParams(window.location.search);
-const eventId = params.get("eventId") || ""; // ถ้ามี = โหมดแชร์ข้ามเครื่อ
+const eventId = params.get("eventId") || ""; // ถ้ามี = โหมดแชร์ข้ามเครื่อง
+
+// ✅ Storage Adapter (กันพังทั้งบนมือถือ / GitHub Pages / QR / ไม่มี window.storage)
 const storage = {
   get: async (key) => {
     try {
-      // ถ้ามี window.storage (บางแพลตฟอร์ม)
-      if (storage && typeof wstorage.get === 'function') {
-        const res = await storage.get(key);
-        // รองรับทั้ง {value: "..."} และ "..." ตรงๆ
-        const val = (res && typeof res === 'object' && 'value' in res) ? res.value : res;
+      if (window.storage && typeof window.storage.get === "function") {
+        const res = await window.storage.get(key);
+        const val = (res && typeof res === "object" && "value" in res) ? res.value : res;
         return val ?? null;
       }
-      // fallback: localStorage
       return localStorage.getItem(key);
     } catch (e) {
-      console.error('storage.get error', key, e);
+      console.error("storage.get error", key, e);
       return localStorage.getItem(key);
     }
   },
+  set: async (key, value) => {
+    try {
+      if (window.storage && typeof window.storage.set === "function") {
+        await window.storage.set(key, value);
+        return;
+      }
+      localStorage.setItem(key, value);
+    } catch (e) {
+      console.error("storage.set error", key, e);
+      localStorage.setItem(key, value);
+    }
+  }
+};
   set: async (key, value) => {
     try {
       if (storage && typeof storage.set === 'function') {
@@ -213,29 +225,29 @@ const storage = {
       };
 
       const deleteCategory = async (catId) => {
-        if (!confirm('⚠️ คุณแน่ใจหรือไม่ที่จะลบประเภทนี้?\n\nการลบจะทำให้:\n- ประเภทนี้หายไป\n- ผลงานในประเภทนี้ถูกลบ\n- คะแนนทั้งหมดถูกลบ')) return;
-        
-        const newCategories = categories.filter(c => c.id !== catId);
-        setCategories(newCategories);
-        
-        const newEntries = entries.filter(e => e.categoryId !== catId);
-        setEntries(newEntries);
-        
-        const deletedEntryIds = entries.filter(e => e.categoryId === catId).map(e => e.id);
-        const newScores = scores.filter(s => !deletedEntryIds.includes(s.entryId));
-        setScores(newScores);
-        
-        try {
-  await Promise.all([
-    storage.set('categories', JSON.stringify(newCategories)),
-    storage.set('entries', JSON.stringify(newEntries)),
-    storage.set('scores', JSON.stringify(newScores))
-  ]);
-  alert('✅ ลบประเภทสำเร็จ!');
-} catch (error) {
-  alert('❌ เกิดข้อผิดพลาดในการบันทึก');
-}
-
+  if (!confirm('⚠️ คุณแน่ใจหรือไม่ที่จะลบประเภทนี้?\n\nการลบจะทำให้:\n- ประเภทนี้หายไป\n- ผลงานในประเภทนี้ถูกลบ\n- คะแนนทั้งหมดถูกลบ')) return;
+  
+  const newCategories = categories.filter(c => c.id !== catId);
+  setCategories(newCategories);
+  
+  const newEntries = entries.filter(e => e.categoryId !== catId);
+  setEntries(newEntries);
+  
+  const deletedEntryIds = entries.filter(e => e.categoryId === catId).map(e => e.id);
+  const newScores = scores.filter(s => !deletedEntryIds.includes(s.entryId));
+  setScores(newScores);
+  
+  try {
+    await Promise.all([
+      storage.set('categories', JSON.stringify(newCategories)),
+      storage.set('entries', JSON.stringify(newEntries)),
+      storage.set('scores', JSON.stringify(newScores))
+    ]);
+    alert('✅ ลบประเภทสำเร็จ!');
+  } catch (error) {
+    alert('❌ เกิดข้อผิดพลาดในการบันทึก');
+  }
+};
       const addCriteria = (catId) => {
         setCategories(categories.map(cat => {
           if (cat.id === catId) {
@@ -893,6 +905,7 @@ root.render(React.createElement(App));
   </script>
 </body>
 </html>
+
 
 
 
