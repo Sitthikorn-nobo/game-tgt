@@ -149,24 +149,29 @@
     };
 
     // ===============================
-    // Excel Export Function (แนวตั้ง)
+    // Excel Export Function (แยกตามกรรมการ)
     // ===============================
     const exportToExcel = (categories, judges, entries, scores) => {
       const workbook = XLSX.utils.book_new();
 
-      categories.forEach(cat => {
+      // สร้าง Sheet สำหรับแต่ละกรรมการ
+      judges.forEach((judge, judgeIdx) => {
         const sheetData = [];
         
-        // หัวข้อประเภท
-        sheetData.push([`ประเภท: ${cat.name}`]);
+        // หัวข้อกรรมการ
+        sheetData.push([`กรรมการ ${judgeIdx + 1}: ${judge.name}`]);
         sheetData.push(['']); // บรรทัดว่าง
 
-        // สร้างข้อมูลแยกตามกรรมการ
-        judges.forEach((judge, judgeIdx) => {
-          // หัวข้อกรรมการ
-          sheetData.push([`กรรมการ ${judgeIdx + 1}: ${judge.name}`]);
+        // แยกตามประเภท
+        categories.forEach(cat => {
+          const categoryEntries = entries.filter(e => e.categoryId === cat.id);
           
-          // Header สำหรับแต่ละกรรมการ
+          if (categoryEntries.length === 0) return; // ข้ามถ้าไม่มีผลงานในประเภทนี้
+          
+          // หัวข้อประเภท
+          sheetData.push([`ประเภท: ${cat.name}`]);
+          
+          // Header
           const header = ['ผลงาน/ทีม'];
           cat.criteria.forEach(crit => {
             header.push(crit.name);
@@ -174,35 +179,65 @@
           header.push('คะแนนรวม');
           sheetData.push(header);
 
-          // ข้อมูลผลงานของกรรมการคนนี้
-          const categoryEntries = entries.filter(e => e.categoryId === cat.id);
+          // ข้อมูลผลงาน
           categoryEntries.forEach(entry => {
             const entryScore = scores.find(s => s.judgeId === judge.id && s.entryId === entry.id);
             
             const row = [entry.name];
             let totalScore = 0;
             
-            cat.criteria.forEach((crit, critIdx) => {
-              const score = entryScore ? (entryScore.scores[critIdx] || 0) : 0;
-              row.push(score);
-              totalScore += parseInt(score) || 0;
-            });
+            if (entryScore) {
+              cat.criteria.forEach((crit, critIdx) => {
+                const score = entryScore.scores[critIdx] || 0;
+                row.push(score);
+                totalScore += parseInt(score) || 0;
+              });
+            } else {
+              // ยังไม่ได้ให้คะแนน
+              cat.criteria.forEach(() => {
+                row.push('-');
+              });
+            }
             
-            row.push(totalScore);
+            row.push(entryScore ? totalScore : '-');
             sheetData.push(row);
           });
           
-          sheetData.push(['']); // บรรทัดว่างหลังกรรมการแต่ละคน
+          sheetData.push(['']); // บรรทัดว่างระหว่างประเภท
         });
 
-        // สรุปคะแนนรวมทั้งหมด
-        sheetData.push(['']);
-        sheetData.push(['===== สรุปคะแนนรวมทั้งหมด =====']);
-        sheetData.push(['อันดับ', 'ผลงาน/ทีม', 'คะแนนรวม', 'จำนวนกรรมการ']);
+        // สร้าง worksheet
+        const worksheet = XLSX.utils.aoa_to_sheet(sheetData);
+        
+        // ตั้งค่าความกว้างคอลัมน์
+        const maxCriteria = Math.max(...categories.map(c => c.criteria.length));
+        const colWidths = [{ wch: 30 }]; // ชื่อผลงาน
+        for (let i = 0; i < maxCriteria; i++) {
+          colWidths.push({ wch: 15 }); // แต่ละหมวด
+        }
+        colWidths.push({ wch: 12 }); // คะแนนรวม
+        worksheet['!cols'] = colWidths;
+
+        // เพิ่ม worksheet เข้า workbook
+        const sheetName = `${judgeIdx + 1}_${judge.name}`.substring(0, 31);
+        XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+      });
+
+      // Sheet สรุปคะแนนรวมทั้งหมด
+      const summaryData = [];
+      summaryData.push(['===== สรุปคะแนนรวมทั้งหมด =====']);
+      summaryData.push(['']);
+
+      categories.forEach(cat => {
+        const categoryEntries = entries.filter(e => e.categoryId === cat.id);
+        
+        if (categoryEntries.length === 0) return;
+        
+        summaryData.push([`ประเภท: ${cat.name}`]);
+        summaryData.push(['อันดับ', 'ผลงาน/ทีม', 'คะแนนรวม', 'จำนวนกรรมการที่ให้คะแนน']);
 
         // คำนวณคะแนนรวม
-        const results = entries
-          .filter(e => e.categoryId === cat.id)
+        const results = categoryEntries
           .map(entry => {
             const entryScores = scores.filter(s => s.entryId === entry.id);
             const totalScore = entryScores.reduce((sum, s) => {
@@ -218,26 +253,26 @@
           .sort((a, b) => b.totalScore - a.totalScore);
 
         results.forEach((result, idx) => {
-          sheetData.push([
+          summaryData.push([
             idx + 1,
             result.name,
             result.totalScore,
-            result.judgeCount
+            `${result.judgeCount} / ${judges.length}`
           ]);
         });
-
-        // สร้าง worksheet
-        const worksheet = XLSX.utils.aoa_to_sheet(sheetData);
         
-        // ตั้งค่าความกว้างคอลัมน์
-        const colWidths = [{ wch: 30 }]; // ชื่อผลงาน
-        cat.criteria.forEach(() => colWidths.push({ wch: 15 })); // แต่ละหมวด
-        colWidths.push({ wch: 12 }); // คะแนนรวม
-        worksheet['!cols'] = colWidths;
-
-        // เพิ่ม worksheet เข้า workbook
-        XLSX.utils.book_append_sheet(workbook, worksheet, cat.name.substring(0, 31));
+        summaryData.push(['']); // บรรทัดว่างระหว่างประเภท
       });
+
+      // สร้าง summary worksheet
+      const summaryWorksheet = XLSX.utils.aoa_to_sheet(summaryData);
+      summaryWorksheet['!cols'] = [
+        { wch: 10 }, // อันดับ
+        { wch: 30 }, // ผลงาน
+        { wch: 15 }, // คะแนนรวม
+        { wch: 25 }  // จำนวนกรรมการ
+      ];
+      XLSX.utils.book_append_sheet(workbook, summaryWorksheet, 'สรุปคะแนน');
 
       // ดาวน์โหลดไฟล์
       const fileName = `ผลคะแนน_${eventId}_${new Date().toISOString().split('T')[0]}.xlsx`;
@@ -246,6 +281,7 @@
       logActivity('export_excel', {
         fileName: fileName,
         categoriesCount: categories.length,
+        judgesCount: judges.length,
         totalEntries: entries.length
       });
     };
