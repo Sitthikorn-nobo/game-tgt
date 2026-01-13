@@ -219,7 +219,7 @@
         worksheet['!cols'] = colWidths;
 
         // เพิ่ม worksheet เข้า workbook
-        const sheetName = `${judgeIdx + 1}_${judge.name}`.substring(0, 31);
+        const sheetName = `กรรมการ${judgeIdx + 1}`;
         XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
       });
 
