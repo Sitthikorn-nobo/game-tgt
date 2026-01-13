@@ -545,6 +545,28 @@
         }
       };
 
+      const resetEntryScores = async (entryId, entryName) => {
+        if (!confirm(`⚠️ คุณแน่ใจหรือไม่ที่จะรีเซ็ตคะแนนของ "${entryName}"?\n\nคะแนนทั้งหมดจะถูกลบและกรรมการต้องให้คะแนนใหม่อีกครั้ง`)) return;
+        
+        const deletedScores = scores.filter(s => s.entryId === entryId);
+        const newScores = scores.filter(s => s.entryId !== entryId);
+        
+        logActivity('admin_reset_entry_scores', {
+          entryId: entryId,
+          entryName: entryName,
+          deletedScoresCount: deletedScores.length,
+          judgesAffected: deletedScores.map(s => {
+            const judge = judges.find(j => j.id === s.judgeId);
+            return judge?.name;
+          }).filter(Boolean)
+        });
+        
+        setScores(newScores);
+        await storageAdapter.set('scores', JSON.stringify(newScores));
+        
+        alert(`✅ รีเซ็ตคะแนนของ "${entryName}" สำเร็จ!\n\nลบคะแนนจำนวน ${deletedScores.length} รายการ`);
+      };
+
       const startJudging = (judgeId) => {
         const judge = judges.find(j => j.id === judgeId);
         logActivity('judge_start', {
@@ -574,16 +596,37 @@
 
         const totalScoreValue = Object.values(currentScore).reduce((sum, v) => sum + (parseInt(v) || 0), 0);
 
-        const newScore = {
-          id: `s${Date.now()}`,
-          judgeId: selectedJudge,
-          entryId: entry.id,
-          scores: { ...currentScore },
-          timestamp: new Date().toISOString()
-        };
+        // ตรวจสอบว่ามีคะแนนเดิมอยู่แล้วหรือไม่
+        const existingScoreIndex = scores.findIndex(
+          s => s.judgeId === selectedJudge && s.entryId === entry.id
+        );
+
+        let updatedScores;
+        let isUpdate = false;
+
+        if (existingScoreIndex !== -1) {
+          // มีคะแนนเดิมอยู่แล้ว - แทนที่คะแนนเดิม
+          updatedScores = [...scores];
+          updatedScores[existingScoreIndex] = {
+            ...updatedScores[existingScoreIndex],
+            scores: { ...currentScore },
+            timestamp: new Date().toISOString()
+          };
+          isUpdate = true;
+        } else {
+          // ไม่มีคะแนนเดิม - สร้างใหม่
+          const newScore = {
+            id: `s${Date.now()}`,
+            judgeId: selectedJudge,
+            entryId: entry.id,
+            scores: { ...currentScore },
+            timestamp: new Date().toISOString()
+          };
+          updatedScores = [...scores, newScore];
+        }
 
         // Log การให้คะแนน
-        logActivity('score_submitted', {
+        logActivity(isUpdate ? 'score_updated' : 'score_submitted', {
           judgeId: selectedJudge,
           judgeName: judge?.name,
           entryId: entry.id,
@@ -591,14 +634,30 @@
           categoryName: category.name,
           totalScore: totalScoreValue,
           entryIndex: currentEntryIndex + 1,
-          totalEntries: entries.length
+          totalEntries: entries.length,
+          isUpdate: isUpdate
         });
 
-        // บันทึกประวัติการให้คะแนน
-        const newHistory = [...judgeScoreHistory, { entryIndex: currentEntryIndex, score: newScore }];
+        // อัพเดท judgeScoreHistory ถ้าเป็นการแก้ไข
+        let newHistory;
+        const existingHistoryIndex = judgeScoreHistory.findIndex(h => h.entryIndex === currentEntryIndex);
+        
+        if (existingHistoryIndex !== -1) {
+          // แทนที่ในประวัติ
+          newHistory = [...judgeScoreHistory];
+          newHistory[existingHistoryIndex] = { 
+            entryIndex: currentEntryIndex, 
+            score: updatedScores[existingScoreIndex !== -1 ? existingScoreIndex : updatedScores.length - 1]
+          };
+        } else {
+          // เพิ่มใหม่ในประวัติ
+          newHistory = [...judgeScoreHistory, { 
+            entryIndex: currentEntryIndex, 
+            score: updatedScores[existingScoreIndex !== -1 ? existingScoreIndex : updatedScores.length - 1]
+          }];
+        }
+        
         setJudgeScoreHistory(newHistory);
-
-        const updatedScores = [...scores, newScore];
         setScores(updatedScores);
         await storageAdapter.set('scores', JSON.stringify(updatedScores));
 
@@ -956,6 +1015,7 @@
                           'system_access': '🌐 เข้าสู่ระบบ',
                           'judge_start': '👨‍⚖️ กรรมการเริ่มให้คะแนน',
                           'score_submitted': '✅ บันทึกคะแนน',
+                          'score_updated': '🔄 แก้ไขคะแนน',
                           'judge_completed': '🎉 กรรมการให้คะแนนครบ',
                           'admin_login_success': '🔓 Admin เข้าสู่ระบบสำเร็จ',
                           'admin_login_failed': '🔒 Admin ใส่รหัสผิด',
@@ -969,6 +1029,7 @@
                           'admin_add_entry': '➕ เพิ่มผลงาน',
                           'admin_delete_entry': '🗑️ ลบผลงาน',
                           'admin_change_entry_category': '🔄 เปลี่ยนประเภทผลงาน',
+                          'admin_reset_entry_scores': '🔄 รีเซ็ตคะแนนผลงาน',
                           'view_results': '📊 ดูผลการแข่งขัน',
                           'export_excel': '📥 ดาวน์โหลด Excel'
                         };
@@ -1315,9 +1376,23 @@
 
                               {result.details.length > 0 && (
                                 <div className="mt-4 space-y-3">
-                                  <p className={`font-semibold ${idx < 3 ? 'text-white opacity-90' : 'text-gray-700'}`}>
-                                    รายละเอียดคะแนน:
-                                  </p>
+                                  <div className="flex justify-between items-center">
+                                    <p className={`font-semibold ${idx < 3 ? 'text-white opacity-90' : 'text-gray-700'}`}>
+                                      รายละเอียดคะแนน:
+                                    </p>
+                                    {isAdminAuthenticated && (
+                                      <button
+                                        onClick={() => resetEntryScores(result.entry.id, result.entry.name)}
+                                        className={`px-3 py-1 rounded-lg font-semibold text-sm transition-all ${
+                                          idx < 3 
+                                            ? 'bg-white/30 text-white hover:bg-white/40' 
+                                            : 'bg-red-500 text-white hover:bg-red-600'
+                                        }`}
+                                      >
+                                        🔄 รีเซ็ตคะแนน
+                                      </button>
+                                    )}
+                                  </div>
                                   {result.details.map((detail, dIdx) => {
                                     const judge = judges.find(j => j.id === detail.judgeId);
                                     const totalScore = Object.values(detail.scores).reduce((sum, v) => sum + (parseInt(v) || 0), 0);
