@@ -774,15 +774,15 @@
           <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
             <div className="max-w-6xl mx-auto">
               <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
-                <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white">
-                  <div className="flex justify-between items-center">
-                    <h1 className="text-3xl font-bold">🔒 ผู้ดูแลระบบ</h1>
+                <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-4 sm:p-6 text-white">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                    <h1 className="text-2xl sm:text-3xl font-bold">🔒 ผู้ดูแลระบบ</h1>
                     <button
                       onClick={() => {
                         setIsAdminAuthenticated(false);
                         setMode('start');
                       }}
-                      className="bg-white text-blue-600 px-6 py-2 rounded-lg font-semibold hover:bg-blue-50"
+                      className="bg-white text-blue-600 px-4 sm:px-6 py-2 rounded-lg font-semibold hover:bg-blue-50 w-full sm:w-auto"
                     >
                       ← ออกจากระบบ
                     </button>
@@ -794,26 +794,26 @@
                   )}
                 </div>
 
-                <div className="p-6 space-y-6">
-                  <div className="bg-blue-50 p-6 rounded-xl">
-                    <div className="flex justify-between items-center mb-4">
-                      <h2 className="text-2xl font-bold text-blue-900">📋 ประเภทการประกวด</h2>
-                      <button onClick={addCategory} className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-semibold">
+                <div className="p-4 sm:p-6 space-y-6 overflow-x-hidden">
+                  <div className="bg-blue-50 p-4 sm:p-6 rounded-xl">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
+                      <h2 className="text-xl sm:text-2xl font-bold text-blue-900">📋 ประเภทการประกวด</h2>
+                      <button onClick={addCategory} className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 font-semibold w-full sm:w-auto">
                         + เพิ่มประเภท
                       </button>
                     </div>
                     
                     {categories.map(cat => (
-                      <div key={cat.id} className="bg-white p-6 rounded-xl mb-4 shadow">
-                        <div className="flex justify-between items-center mb-4">
-                          <h3 className="font-bold text-xl">{cat.name}</h3>
-                          <div className="flex gap-2 items-center">
-                            <span className="px-4 py-2 rounded-full text-sm font-bold bg-blue-100 text-blue-800">
+                      <div key={cat.id} className="bg-white p-4 sm:p-6 rounded-xl mb-4 shadow">
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
+                          <h3 className="font-bold text-lg sm:text-xl">{cat.name}</h3>
+                          <div className="flex flex-wrap gap-2 items-center w-full sm:w-auto">
+                            <span className="px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm font-bold bg-blue-100 text-blue-800">
                               รวม: {getTotalScore(cat.id)} คะแนน
                             </span>
                             <button
                               onClick={() => deleteCategory(cat.id)}
-                              className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 font-semibold"
+                              className="bg-red-500 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-red-600 font-semibold text-sm sm:text-base"
                             >
                               🗑️ ลบ
                             </button>
@@ -821,25 +821,31 @@
                         </div>
 
                         {cat.criteria.map((crit, idx) => (
-                          <div key={crit.id || idx} className="flex gap-2 mb-3">
-                            <input
-                              type="text"
-                              value={crit.name}
-                              onChange={(e) => updateCriteria(cat.id, idx, 'name', e.target.value)}
-                              className="flex-1 px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
-                            />
-                            <input
-                              type="number"
-                              value={crit.maxScore}
-                              onChange={(e) => updateCriteria(cat.id, idx, 'maxScore', e.target.value)}
-                              className="w-28 px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none text-center font-semibold"
-                            />
-                            <button
-                              onClick={() => deleteCriteria(cat.id, idx)}
-                              className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 font-semibold"
-                            >
-                              ลบ
-                            </button>
+                          <div key={crit.id || idx} className="mb-3">
+                            <div className="flex flex-col sm:flex-row gap-2">
+                              <input
+                                type="text"
+                                value={crit.name}
+                                onChange={(e) => updateCriteria(cat.id, idx, 'name', e.target.value)}
+                                placeholder="ชื่อหมวดคะแนน"
+                                className="flex-1 px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                              />
+                              <div className="flex gap-2">
+                                <input
+                                  type="number"
+                                  value={crit.maxScore}
+                                  onChange={(e) => updateCriteria(cat.id, idx, 'maxScore', e.target.value)}
+                                  placeholder="คะแนน"
+                                  className="w-full sm:w-28 px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none text-center font-semibold"
+                                />
+                                <button
+                                  onClick={() => deleteCriteria(cat.id, idx)}
+                                  className="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 font-semibold whitespace-nowrap"
+                                >
+                                  🗑️ ลบ
+                                </button>
+                              </div>
+                            </div>
                           </div>
                         ))}
 
@@ -854,10 +860,10 @@
                   </div>
 
                   <div className="grid md:grid-cols-2 gap-6">
-                    <div className="bg-green-50 p-6 rounded-xl">
-                      <div className="flex justify-between items-center mb-4">
-                        <h2 className="text-2xl font-bold text-green-900">👨‍⚖️ กรรมการ ({judges.length})</h2>
-                        <button onClick={addJudge} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 font-semibold">
+                    <div className="bg-green-50 p-4 sm:p-6 rounded-xl">
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
+                        <h2 className="text-xl sm:text-2xl font-bold text-green-900">👨‍⚖️ กรรมการ ({judges.length})</h2>
+                        <button onClick={addJudge} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 font-semibold w-full sm:w-auto">
                           + เพิ่ม
                         </button>
                       </div>
@@ -880,10 +886,10 @@
                       </div>
                     </div>
 
-                    <div className="bg-purple-50 p-6 rounded-xl">
-                      <div className="flex justify-between items-center mb-4">
-                        <h2 className="text-2xl font-bold text-purple-900">🎨 ผลงาน ({entries.length})</h2>
-                        <button onClick={addEntry} className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 font-semibold">
+                    <div className="bg-purple-50 p-4 sm:p-6 rounded-xl">
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
+                        <h2 className="text-xl sm:text-2xl font-bold text-purple-900">🎨 ผลงาน ({entries.length})</h2>
+                        <button onClick={addEntry} className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 font-semibold w-full sm:w-auto">
                           + เพิ่ม
                         </button>
                       </div>
@@ -943,19 +949,19 @@
           <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-50 p-4">
             <div className="max-w-6xl mx-auto">
               <div className="bg-white rounded-2xl shadow-2xl overflow-hidden mb-6">
-                <div className="bg-gradient-to-r from-purple-600 to-pink-600 p-6 text-white">
-                  <div className="flex justify-between items-center">
-                    <h1 className="text-3xl font-bold">🏆 ผลการแข่งขัน</h1>
-                    <div className="flex gap-3">
+                <div className="bg-gradient-to-r from-purple-600 to-pink-600 p-4 sm:p-6 text-white">
+                  <div className="flex flex-col gap-3">
+                    <h1 className="text-2xl sm:text-3xl font-bold text-center sm:text-left">🏆 ผลการแข่งขัน</h1>
+                    <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
                       <button
                         onClick={() => exportToExcel(categories, judges, entries, scores)}
-                        className="bg-green-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-green-700 flex items-center gap-2"
+                        className="bg-green-600 text-white px-4 sm:px-6 py-2 rounded-lg font-semibold hover:bg-green-700 flex items-center justify-center gap-2"
                       >
                         📥 ดาวน์โหลด Excel
                       </button>
                       <button
                         onClick={() => setMode('start')}
-                        className="bg-white text-purple-600 px-6 py-2 rounded-lg font-semibold hover:bg-purple-50"
+                        className="bg-white text-purple-600 px-4 sm:px-6 py-2 rounded-lg font-semibold hover:bg-purple-50"
                       >
                         ← กลับ
                       </button>
@@ -989,26 +995,26 @@
                                 : 'bg-white border-2 border-gray-200'
                             }`}
                           >
-                            <div className="p-6">
-                              <div className="flex justify-between items-center mb-4">
-                                <div className="flex items-center gap-4">
-                                  <span className={`text-5xl font-bold ${idx < 3 ? 'text-white' : 'text-gray-700'}`}>
+                            <div className="p-4 sm:p-6">
+                              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+                                <div className="flex items-start sm:items-center gap-3 sm:gap-4 w-full sm:w-auto">
+                                  <span className={`text-4xl sm:text-5xl font-bold ${idx < 3 ? 'text-white' : 'text-gray-700'}`}>
                                     {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`}
                                   </span>
-                                  <div>
-                                    <h3 className={`text-2xl font-bold ${idx < 3 ? 'text-white' : 'text-gray-900'}`}>
+                                  <div className="flex-1">
+                                    <h3 className={`text-xl sm:text-2xl font-bold break-words ${idx < 3 ? 'text-white' : 'text-gray-900'}`}>
                                       {result.entry.name}
                                     </h3>
-                                    <p className={`text-sm ${idx < 3 ? 'text-white opacity-90' : 'text-gray-600'}`}>
+                                    <p className={`text-xs sm:text-sm ${idx < 3 ? 'text-white opacity-90' : 'text-gray-600'}`}>
                                       {result.scoreCount} กรรมการให้คะแนน
                                     </p>
                                   </div>
                                 </div>
-                                <div className="text-right">
-                                  <div className={`text-4xl font-bold ${idx < 3 ? 'text-white' : 'text-indigo-600'}`}>
+                                <div className="text-left sm:text-right w-full sm:w-auto">
+                                  <div className={`text-3xl sm:text-4xl font-bold ${idx < 3 ? 'text-white' : 'text-indigo-600'}`}>
                                     {result.avgScore.toFixed(2)}
                                   </div>
-                                  <div className={`text-sm ${idx < 3 ? 'text-white opacity-90' : 'text-gray-600'}`}>
+                                  <div className={`text-xs sm:text-sm ${idx < 3 ? 'text-white opacity-90' : 'text-gray-600'}`}>
                                     คะแนนเฉลี่ย
                                   </div>
                                 </div>
@@ -1027,21 +1033,21 @@
                                     return (
                                       <div
                                         key={dIdx}
-                                        className={`p-4 rounded-lg ${
+                                        className={`p-3 sm:p-4 rounded-lg ${
                                           idx < 3 ? 'bg-white/20 backdrop-blur' : 'bg-gray-50'
                                         }`}
                                       >
-                                        <div className="flex justify-between items-center mb-3">
-                                          <span className={`font-semibold ${idx < 3 ? 'text-white' : 'text-gray-800'}`}>
+                                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-0 mb-3">
+                                          <span className={`font-semibold text-sm sm:text-base ${idx < 3 ? 'text-white' : 'text-gray-800'}`}>
                                             👨‍⚖️ {judge?.name || 'ไม่ระบุ'}
                                           </span>
-                                          <span className={`font-bold text-lg ${idx < 3 ? 'text-white' : 'text-indigo-600'}`}>
+                                          <span className={`font-bold text-base sm:text-lg ${idx < 3 ? 'text-white' : 'text-indigo-600'}`}>
                                             {totalScore} คะแนน
                                           </span>
                                         </div>
-                                        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                                           {Object.entries(detail.scores).map(([key, value], sIdx) => (
-                                            <div key={sIdx} className={`text-sm ${idx < 3 ? 'text-white opacity-90' : 'text-gray-700'}`}>
+                                            <div key={sIdx} className={`text-xs sm:text-sm ${idx < 3 ? 'text-white opacity-90' : 'text-gray-700'}`}>
                                               • {cat.criteria[key]?.name}: <span className="font-semibold">{value}/{cat.criteria[key]?.maxScore}</span>
                                             </div>
                                           ))}
