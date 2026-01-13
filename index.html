@@ -149,85 +149,90 @@
     };
 
     // ===============================
-    // Excel Export Function
+    // Excel Export Function (แนวตั้ง)
     // ===============================
     const exportToExcel = (categories, judges, entries, scores) => {
       const workbook = XLSX.utils.book_new();
 
       categories.forEach(cat => {
+        const sheetData = [];
+        
+        // หัวข้อประเภท
+        sheetData.push([`ประเภท: ${cat.name}`]);
+        sheetData.push(['']); // บรรทัดว่าง
+
+        // สร้างข้อมูลแยกตามกรรมการ
+        judges.forEach((judge, judgeIdx) => {
+          // หัวข้อกรรมการ
+          sheetData.push([`กรรมการ ${judgeIdx + 1}: ${judge.name}`]);
+          
+          // Header สำหรับแต่ละกรรมการ
+          const header = ['ผลงาน/ทีม'];
+          cat.criteria.forEach(crit => {
+            header.push(crit.name);
+          });
+          header.push('คะแนนรวม');
+          sheetData.push(header);
+
+          // ข้อมูลผลงานของกรรมการคนนี้
+          const categoryEntries = entries.filter(e => e.categoryId === cat.id);
+          categoryEntries.forEach(entry => {
+            const entryScore = scores.find(s => s.judgeId === judge.id && s.entryId === entry.id);
+            
+            const row = [entry.name];
+            let totalScore = 0;
+            
+            cat.criteria.forEach((crit, critIdx) => {
+              const score = entryScore ? (entryScore.scores[critIdx] || 0) : 0;
+              row.push(score);
+              totalScore += parseInt(score) || 0;
+            });
+            
+            row.push(totalScore);
+            sheetData.push(row);
+          });
+          
+          sheetData.push(['']); // บรรทัดว่างหลังกรรมการแต่ละคน
+        });
+
+        // สรุปคะแนนรวมทั้งหมด
+        sheetData.push(['']);
+        sheetData.push(['===== สรุปคะแนนรวมทั้งหมด =====']);
+        sheetData.push(['อันดับ', 'ผลงาน/ทีม', 'คะแนนรวม', 'จำนวนกรรมการ']);
+
+        // คำนวณคะแนนรวม
         const results = entries
           .filter(e => e.categoryId === cat.id)
           .map(entry => {
             const entryScores = scores.filter(s => s.entryId === entry.id);
+            const totalScore = entryScores.reduce((sum, s) => {
+              return sum + Object.values(s.scores).reduce((a, b) => a + (parseInt(b) || 0), 0);
+            }, 0);
             
-            const judgeScores = judges.map(judge => {
-              const judgeScore = entryScores.find(s => s.judgeId === judge.id);
-              if (!judgeScore) return { name: judge.name, total: 0, details: {} };
-              
-              const total = Object.values(judgeScore.scores).reduce((sum, v) => sum + (parseInt(v) || 0), 0);
-              return { name: judge.name, total, details: judgeScore.scores };
-            });
-
-            const totalScore = entryScores.length > 0
-              ? entryScores.reduce((sum, s) => {
-                  return sum + Object.values(s.scores).reduce((a, b) => a + (parseInt(b) || 0), 0);
-                }, 0)
-              : 0;
-
-            return { entry, judgeScores, totalScore };
+            return { 
+              name: entry.name, 
+              totalScore, 
+              judgeCount: entryScores.length 
+            };
           })
           .sort((a, b) => b.totalScore - a.totalScore);
 
-        // สร้างข้อมูลสำหรับ sheet
-        const sheetData = [];
-        
-        // Header row 1
-        const header1 = ['อันดับ', 'ผลงาน/ทีม', 'คะแนนรวม'];
-        judges.forEach(judge => {
-          header1.push(judge.name);
-          cat.criteria.forEach(() => header1.push(''));
-        });
-        sheetData.push(header1);
-
-        // Header row 2 (criteria details)
-        const header2 = ['', '', ''];
-        judges.forEach(() => {
-          header2.push('รวม');
-          cat.criteria.forEach(crit => header2.push(crit.name));
-        });
-        sheetData.push(header2);
-
-        // Data rows
         results.forEach((result, idx) => {
-          const row = [
+          sheetData.push([
             idx + 1,
-            result.entry.name,
-            result.totalScore.toFixed(0)
-          ];
-
-          result.judgeScores.forEach(judgeScore => {
-            row.push(judgeScore.total);
-            cat.criteria.forEach((crit, critIdx) => {
-              row.push(judgeScore.details[critIdx] || 0);
-            });
-          });
-
-          sheetData.push(row);
+            result.name,
+            result.totalScore,
+            result.judgeCount
+          ]);
         });
 
         // สร้าง worksheet
         const worksheet = XLSX.utils.aoa_to_sheet(sheetData);
         
         // ตั้งค่าความกว้างคอลัมน์
-        const colWidths = [
-          { wch: 8 },  // อันดับ
-          { wch: 30 }, // ผลงาน
-          { wch: 12 }  // คะแนนรวม
-        ];
-        judges.forEach(() => {
-          colWidths.push({ wch: 10 }); // รวม
-          cat.criteria.forEach(() => colWidths.push({ wch: 15 })); // แต่ละหมวด
-        });
+        const colWidths = [{ wch: 30 }]; // ชื่อผลงาน
+        cat.criteria.forEach(() => colWidths.push({ wch: 15 })); // แต่ละหมวด
+        colWidths.push({ wch: 12 }); // คะแนนรวม
         worksheet['!cols'] = colWidths;
 
         // เพิ่ม worksheet เข้า workbook
@@ -894,8 +899,8 @@
 
               <div className="bg-gradient-to-br from-purple-500 to-indigo-600 rounded-2xl shadow-xl p-8 mb-6 text-white">
                 <div className="text-center">
-                  <h2 className="text-4xl font-bold mb-2" style={{ fontFamily: 'Sarabun, sans-serif' }}>{entry.name}</h2>
-                  <p className="text-purple-100 text-lg" style={{ fontFamily: 'Sarabun, sans-serif' }}>ประเภท: {category.name}</p>
+                  <h2 className="text-5xl font-bold mb-3" style={{ fontFamily: 'Sarabun, sans-serif' }}>{entry.name}</h2>
+                  <p className="text-purple-100 text-2xl" style={{ fontFamily: 'Sarabun, sans-serif' }}>ประเภท: {category.name}</p>
                 </div>
               </div>
 
