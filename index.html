@@ -3,15 +3,18 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ระบบให้คะแนนการประกวด (Firebase)</title>
+  <title>ระบบให้คะแนนการประกวด (Improved)</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   
-  <!-- 🔥 Firebase SDK -->
+  <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+  
+  <!-- SheetJS for Excel export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   
   <style>
     body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
@@ -26,20 +29,19 @@
     const { useState, useEffect } = React;
 
     // ===============================
+    // Firebase Configuration
     // ===============================
-    // 👉 แทนที่ค่าเหล่านี้ด้วย Config จาก Firebase Console
-      const firebaseConfig = {
-    apiKey: "AIzaSyAv__40vL-tk9XrQXJjO_J3k9ReDVQBzNc",
-    authDomain: "scoring-system-9edd3.firebaseapp.com",
-    databaseURL: "https://scoring-system-9edd3-default-rtdb.asia-southeast1.firebasedatabase.app",
-    projectId: "scoring-system-9edd3",
-    storageBucket: "scoring-system-9edd3.firebasestorage.app",
-    messagingSenderId: "82996489684",
-    appId: "1:82996489684:web:2d39de2880aaa002d4ba41",
-    measurementId: "G-NVN3N1QQH4"
-  };
+    const firebaseConfig = {
+      apiKey: "AIzaSyAv__40vL-tk9XrQXJjO_J3k9ReDVQBzNc",
+      authDomain: "scoring-system-9edd3.firebaseapp.com",
+      databaseURL: "https://scoring-system-9edd3-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "scoring-system-9edd3",
+      storageBucket: "scoring-system-9edd3.firebasestorage.app",
+      messagingSenderId: "82996489684",
+      appId: "1:82996489684:web:2d39de2880aaa002d4ba41",
+      measurementId: "G-NVN3N1QQH4"
+    };
 
-    // ตรวจสอบว่า Firebase config ถูกต้อง
     const isFirebaseConfigured = firebaseConfig.apiKey !== "YOUR_API_KEY";
 
     // Initialize Firebase
@@ -56,12 +58,16 @@
       }
     }
 
-    // ดึง eventId จาก URL (สำหรับแชร์หลายคน)
     const params = new URLSearchParams(window.location.search);
     const eventId = params.get("eventId") || "default-event";
 
     // ===============================
-    // 📦 Storage Adapter (Firebase + LocalStorage)
+    // รหัสผ่านผู้ดูแล (เปลี่ยนได้ตามต้องการ)
+    // ===============================
+    const ADMIN_PASSWORD = "admin1234";
+
+    // ===============================
+    // Storage Adapter
     // ===============================
     const storageAdapter = {
       get: async (key) => {
@@ -101,6 +107,97 @@
       }
     };
 
+    // ===============================
+    // Excel Export Function
+    // ===============================
+    const exportToExcel = (categories, judges, entries, scores) => {
+      const workbook = XLSX.utils.book_new();
+
+      categories.forEach(cat => {
+        const results = entries
+          .filter(e => e.categoryId === cat.id)
+          .map(entry => {
+            const entryScores = scores.filter(s => s.entryId === entry.id);
+            
+            const judgeScores = judges.map(judge => {
+              const judgeScore = entryScores.find(s => s.judgeId === judge.id);
+              if (!judgeScore) return { name: judge.name, total: 0, details: {} };
+              
+              const total = Object.values(judgeScore.scores).reduce((sum, v) => sum + (parseInt(v) || 0), 0);
+              return { name: judge.name, total, details: judgeScore.scores };
+            });
+
+            const avgScore = entryScores.length > 0
+              ? entryScores.reduce((sum, s) => {
+                  return sum + Object.values(s.scores).reduce((a, b) => a + (parseInt(b) || 0), 0);
+                }, 0) / entryScores.length
+              : 0;
+
+            return { entry, judgeScores, avgScore };
+          })
+          .sort((a, b) => b.avgScore - a.avgScore);
+
+        // สร้างข้อมูลสำหรับ sheet
+        const sheetData = [];
+        
+        // Header row 1
+        const header1 = ['อันดับ', 'ผลงาน/ทีม', 'คะแนนเฉลี่ย'];
+        judges.forEach(judge => {
+          header1.push(judge.name);
+          cat.criteria.forEach(() => header1.push(''));
+        });
+        sheetData.push(header1);
+
+        // Header row 2 (criteria details)
+        const header2 = ['', '', ''];
+        judges.forEach(() => {
+          header2.push('รวม');
+          cat.criteria.forEach(crit => header2.push(crit.name));
+        });
+        sheetData.push(header2);
+
+        // Data rows
+        results.forEach((result, idx) => {
+          const row = [
+            idx + 1,
+            result.entry.name,
+            result.avgScore.toFixed(2)
+          ];
+
+          result.judgeScores.forEach(judgeScore => {
+            row.push(judgeScore.total);
+            cat.criteria.forEach((crit, critIdx) => {
+              row.push(judgeScore.details[critIdx] || 0);
+            });
+          });
+
+          sheetData.push(row);
+        });
+
+        // สร้าง worksheet
+        const worksheet = XLSX.utils.aoa_to_sheet(sheetData);
+        
+        // ตั้งค่าความกว้างคอลัมน์
+        const colWidths = [
+          { wch: 8 },  // อันดับ
+          { wch: 30 }, // ผลงาน
+          { wch: 12 }  // คะแนนเฉลี่ย
+        ];
+        judges.forEach(() => {
+          colWidths.push({ wch: 10 }); // รวม
+          cat.criteria.forEach(() => colWidths.push({ wch: 15 })); // แต่ละหมวด
+        });
+        worksheet['!cols'] = colWidths;
+
+        // เพิ่ม worksheet เข้า workbook
+        XLSX.utils.book_append_sheet(workbook, worksheet, cat.name.substring(0, 31));
+      });
+
+      // ดาวน์โหลดไฟล์
+      const fileName = `ผลคะแนน_${eventId}_${new Date().toISOString().split('T')[0]}.xlsx`;
+      XLSX.writeFile(workbook, fileName);
+    };
+
     function App() {
       const [mode, setMode] = useState('start');
       const [categories, setCategories] = useState([]);
@@ -111,9 +208,11 @@
       const [selectedJudge, setSelectedJudge] = useState('');
       const [currentEntryIndex, setCurrentEntryIndex] = useState(0);
       const [currentScore, setCurrentScore] = useState({});
+      const [judgeScoreHistory, setJudgeScoreHistory] = useState([]);
       const [loading, setLoading] = useState(true);
       const [saveStatus, setSaveStatus] = useState('');
       const [firebaseStatus, setFirebaseStatus] = useState('');
+      const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
 
       useEffect(() => {
         loadData();
@@ -186,6 +285,16 @@
         } catch (error) {
           setSaveStatus('❌ บันทึกล้มเหลว');
           alert('❌ เกิดข้อผิดพลาด: ' + error.message);
+        }
+      };
+
+      const authenticateAdmin = () => {
+        const password = prompt('🔒 กรุณาใส่รหัสผ่านผู้ดูแล:');
+        if (password === ADMIN_PASSWORD) {
+          setIsAdminAuthenticated(true);
+          setMode('admin');
+        } else if (password !== null) {
+          alert('❌ รหัสผ่านไม่ถูกต้อง!');
         }
       };
 
@@ -309,6 +418,7 @@
         setSelectedJudge(judgeId);
         setCurrentEntryIndex(0);
         setCurrentScore({});
+        setJudgeScoreHistory([]);
         setMode('scoring');
       };
 
@@ -332,6 +442,10 @@
           timestamp: new Date().toISOString()
         };
 
+        // บันทึกประวัติการให้คะแนน
+        const newHistory = [...judgeScoreHistory, { entryIndex: currentEntryIndex, score: newScore }];
+        setJudgeScoreHistory(newHistory);
+
         const updatedScores = [...scores, newScore];
         setScores(updatedScores);
         await storageAdapter.set('scores', JSON.stringify(updatedScores));
@@ -342,6 +456,22 @@
         } else {
           alert('🎉 ให้คะแนนเสร็จสิ้น!');
           setMode('complete');
+        }
+      };
+
+      const goToPreviousEntry = () => {
+        if (currentEntryIndex > 0) {
+          // ย้อนกลับและโหลดคะแนนเดิม
+          const prevIndex = currentEntryIndex - 1;
+          const prevHistory = judgeScoreHistory.find(h => h.entryIndex === prevIndex);
+          
+          if (prevHistory) {
+            setCurrentScore(prevHistory.score.scores);
+          } else {
+            setCurrentScore({});
+          }
+          
+          setCurrentEntryIndex(prevIndex);
         }
       };
 
@@ -410,10 +540,10 @@
                 </button>
 
                 <button
-                  onClick={() => setMode('admin')}
+                  onClick={authenticateAdmin}
                   className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white py-4 rounded-xl font-bold text-lg hover:from-blue-600 hover:to-indigo-700 transition-all shadow-lg"
                 >
-                  ⚙️ ผู้ดูแลระบบ
+                  🔒 ผู้ดูแลระบบ (ต้องใส่รหัส)
                 </button>
 
                 <button
@@ -433,8 +563,8 @@
         return (
           <div className="min-h-screen bg-gradient-to-br from-green-400 via-blue-500 to-purple-600 flex items-center justify-center p-4">
             <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full">
-              <button onClick={() => setMode('start')} className="mb-6 text-gray-600 hover:text-gray-800">
-                ← กลับ
+              <button onClick={() => setMode('start')} className="mb-6 text-gray-600 hover:text-gray-800 font-semibold">
+                ← กลับหน้าหลัก
               </button>
 
               <div className="text-center mb-8">
@@ -514,6 +644,28 @@
                     className="bg-gradient-to-r from-blue-500 to-indigo-600 h-3 rounded-full transition-all"
                     style={{ width: `${progress}%` }}
                   />
+                </div>
+
+                {/* ปุ่มกลับ */}
+                <div className="mt-4 flex gap-3">
+                  {currentEntryIndex > 0 && (
+                    <button
+                      onClick={goToPreviousEntry}
+                      className="flex-1 bg-gray-500 text-white py-3 rounded-xl font-semibold hover:bg-gray-600 transition-all"
+                    >
+                      ← ย้อนกลับ
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      if (confirm('⚠️ คุณต้องการกลับหน้าหลักหรือไม่? (ข้อมูลที่ยังไม่บันทึกจะหาย)')) {
+                        setMode('start');
+                      }
+                    }}
+                    className="flex-1 bg-red-500 text-white py-3 rounded-xl font-semibold hover:bg-red-600 transition-all"
+                  >
+                    🏠 กลับหน้าหลัก
+                  </button>
                 </div>
               </div>
 
@@ -611,20 +763,28 @@
         );
       }
 
-      // ADMIN
+      // ADMIN (ต้องใส่รหัสผ่าน)
       if (mode === 'admin') {
+        if (!isAdminAuthenticated) {
+          setMode('start');
+          return null;
+        }
+
         return (
           <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
             <div className="max-w-6xl mx-auto">
               <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
                 <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white">
                   <div className="flex justify-between items-center">
-                    <h1 className="text-3xl font-bold">⚙️ ผู้ดูแลระบบ</h1>
+                    <h1 className="text-3xl font-bold">🔒 ผู้ดูแลระบบ</h1>
                     <button
-                      onClick={() => setMode('start')}
+                      onClick={() => {
+                        setIsAdminAuthenticated(false);
+                        setMode('start');
+                      }}
                       className="bg-white text-blue-600 px-6 py-2 rounded-lg font-semibold hover:bg-blue-50"
                     >
-                      ← กลับ
+                      ← ออกจากระบบ
                     </button>
                   </div>
                   {saveStatus && (
@@ -783,14 +943,24 @@
           <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-50 p-4">
             <div className="max-w-6xl mx-auto">
               <div className="bg-white rounded-2xl shadow-2xl overflow-hidden mb-6">
-                <div className="bg-gradient-to-r from-purple-600 to-pink-600 p-6 text-white flex justify-between items-center">
-                  <h1 className="text-3xl font-bold">🏆 ผลการแข่งขัน</h1>
-                  <button
-                    onClick={() => setMode('start')}
-                    className="bg-white text-purple-600 px-6 py-2 rounded-lg font-semibold hover:bg-purple-50"
-                  >
-                    ← กลับ
-                  </button>
+                <div className="bg-gradient-to-r from-purple-600 to-pink-600 p-6 text-white">
+                  <div className="flex justify-between items-center">
+                    <h1 className="text-3xl font-bold">🏆 ผลการแข่งขัน</h1>
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => exportToExcel(categories, judges, entries, scores)}
+                        className="bg-green-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-green-700 flex items-center gap-2"
+                      >
+                        📥 ดาวน์โหลด Excel
+                      </button>
+                      <button
+                        onClick={() => setMode('start')}
+                        className="bg-white text-purple-600 px-6 py-2 rounded-lg font-semibold hover:bg-purple-50"
+                      >
+                        ← กลับ
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -905,5 +1075,3 @@
   </script>
 </body>
 </html>
-
-
