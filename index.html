@@ -367,6 +367,12 @@
             name,
             criteria: [{ id: `crit_${Date.now()}`, name: 'หมวดคะแนน 1', maxScore: 100 }]
           }];
+          
+          logActivity('admin_add_category', {
+            categoryName: name,
+            totalCategories: newCategories.length
+          });
+          
           setCategories(newCategories);
           storageAdapter.set('categories', JSON.stringify(newCategories));
         }
@@ -419,6 +425,14 @@
       };
 
       const addCriteria = (catId) => {
+        const category = categories.find(c => c.id === catId);
+        
+        logActivity('admin_add_criteria', {
+          categoryId: catId,
+          categoryName: category?.name,
+          newCriteriaCount: (category?.criteria.length || 0) + 1
+        });
+        
         const newCategories = categories.map(cat => {
           if (cat.id === catId) {
             return {
@@ -449,6 +463,16 @@
       };
 
       const deleteCriteria = (catId, index) => {
+        const category = categories.find(c => c.id === catId);
+        const deletedCriteria = category?.criteria[index];
+        
+        logActivity('admin_delete_criteria', {
+          categoryId: catId,
+          categoryName: category?.name,
+          criteriaName: deletedCriteria?.name,
+          criteriaIndex: index
+        });
+        
         const newCategories = categories.map(cat => {
           if (cat.id === catId) {
             return { ...cat, criteria: cat.criteria.filter((_, i) => i !== index) };
@@ -468,6 +492,12 @@
         const name = prompt('ชื่อกรรมการ:');
         if (name) {
           const newJudges = [...judges, { id: `j${Date.now()}`, name }];
+          
+          logActivity('admin_add_judge', {
+            judgeName: name,
+            totalJudges: newJudges.length
+          });
+          
           setJudges(newJudges);
           storageAdapter.set('judges', JSON.stringify(newJudges));
         }
@@ -484,6 +514,13 @@
         
         if (categories.length === 1) {
           const newEntries = [...entries, { id: `e${Date.now()}`, name, categoryId: categories[0].id }];
+          
+          logActivity('admin_add_entry', {
+            entryName: name,
+            categoryName: categories[0].name,
+            totalEntries: newEntries.length
+          });
+          
           setEntries(newEntries);
           storageAdapter.set('entries', JSON.stringify(newEntries));
         } else {
@@ -493,6 +530,13 @@
           
           if (index >= 0 && index < categories.length) {
             const newEntries = [...entries, { id: `e${Date.now()}`, name, categoryId: categories[index].id }];
+            
+            logActivity('admin_add_entry', {
+              entryName: name,
+              categoryName: categories[index].name,
+              totalEntries: newEntries.length
+            });
+            
             setEntries(newEntries);
             storageAdapter.set('entries', JSON.stringify(newEntries));
           } else {
@@ -916,7 +960,15 @@
                           'admin_login_success': '🔓 Admin เข้าสู่ระบบสำเร็จ',
                           'admin_login_failed': '🔒 Admin ใส่รหัสผิด',
                           'admin_save_data': '💾 บันทึกข้อมูลระบบ',
+                          'admin_add_category': '➕ เพิ่มประเภท',
                           'admin_delete_category': '🗑️ ลบประเภท',
+                          'admin_add_criteria': '➕ เพิ่มหมวดคะแนน',
+                          'admin_delete_criteria': '🗑️ ลบหมวดคะแนน',
+                          'admin_add_judge': '➕ เพิ่มกรรมการ',
+                          'admin_delete_judge': '🗑️ ลบกรรมการ',
+                          'admin_add_entry': '➕ เพิ่มผลงาน',
+                          'admin_delete_entry': '🗑️ ลบผลงาน',
+                          'admin_change_entry_category': '🔄 เปลี่ยนประเภทผลงาน',
                           'view_results': '📊 ดูผลการแข่งขัน',
                           'export_excel': '📥 ดาวน์โหลด Excel'
                         };
@@ -1089,6 +1141,12 @@
                             <span className="font-semibold text-lg">{idx + 1}. {judge.name}</span>
                             <button
                               onClick={() => {
+                                logActivity('admin_delete_judge', {
+                                  judgeId: judge.id,
+                                  judgeName: judge.name,
+                                  remainingJudges: judges.length - 1
+                                });
+                                
                                 const newJudges = judges.filter(j => j.id !== judge.id);
                                 setJudges(newJudges);
                                 storageAdapter.set('judges', JSON.stringify(newJudges));
@@ -1116,6 +1174,15 @@
                               <span className="font-semibold text-lg">{idx + 1}. {entry.name}</span>
                               <button
                                 onClick={() => {
+                                  const category = categories.find(c => c.id === entry.categoryId);
+                                  
+                                  logActivity('admin_delete_entry', {
+                                    entryId: entry.id,
+                                    entryName: entry.name,
+                                    categoryName: category?.name,
+                                    remainingEntries: entries.length - 1
+                                  });
+                                  
                                   const newEntries = entries.filter(e => e.id !== entry.id);
                                   setEntries(newEntries);
                                   storageAdapter.set('entries', JSON.stringify(newEntries));
@@ -1128,6 +1195,16 @@
                             <select
                               value={entry.categoryId}
                               onChange={(e) => {
+                                const oldCategory = categories.find(c => c.id === entry.categoryId);
+                                const newCategory = categories.find(c => c.id === e.target.value);
+                                
+                                logActivity('admin_change_entry_category', {
+                                  entryId: entry.id,
+                                  entryName: entry.name,
+                                  oldCategory: oldCategory?.name,
+                                  newCategory: newCategory?.name
+                                });
+                                
                                 const newEntries = entries.map(ent => 
                                   ent.id === entry.id ? { ...ent, categoryId: e.target.value } : ent
                                 );
