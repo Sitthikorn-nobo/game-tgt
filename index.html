@@ -4,6 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ระบบให้คะแนนการประกวด (Improved)</title>
+  
+  <!-- Google Fonts - Sarabun (ฟอนต์ภาษาไทย) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
@@ -17,7 +23,9 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   
   <style>
-    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    body { 
+      font-family: 'Sarabun', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
     .slider-thumb::-webkit-slider-thumb { appearance: none; width: 24px; height: 24px; background: #3b82f6; border-radius: 50%; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.3); }
     .slider-thumb::-moz-range-thumb { width: 24px; height: 24px; background: #3b82f6; border-radius: 50%; cursor: pointer; border: none; box-shadow: 0 2px 6px rgba(0,0,0,0.3); }
   </style>
@@ -886,9 +894,8 @@
 
               <div className="bg-gradient-to-br from-purple-500 to-indigo-600 rounded-2xl shadow-xl p-8 mb-6 text-white">
                 <div className="text-center">
-                  <div className="text-5xl mb-4">🎨</div>
-                  <h2 className="text-4xl font-bold mb-2">{entry.name}</h2>
-                  <p className="text-purple-100 text-lg">ประเภท: {category.name}</p>
+                  <h2 className="text-4xl font-bold mb-2" style={{ fontFamily: 'Sarabun, sans-serif' }}>{entry.name}</h2>
+                  <p className="text-purple-100 text-lg" style={{ fontFamily: 'Sarabun, sans-serif' }}>ประเภท: {category.name}</p>
                 </div>
               </div>
 
