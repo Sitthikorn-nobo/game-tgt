@@ -127,21 +127,21 @@
               return { name: judge.name, total, details: judgeScore.scores };
             });
 
-            const avgScore = entryScores.length > 0
+            const totalScore = entryScores.length > 0
               ? entryScores.reduce((sum, s) => {
                   return sum + Object.values(s.scores).reduce((a, b) => a + (parseInt(b) || 0), 0);
-                }, 0) / entryScores.length
+                }, 0)
               : 0;
 
-            return { entry, judgeScores, avgScore };
+            return { entry, judgeScores, totalScore };
           })
-          .sort((a, b) => b.avgScore - a.avgScore);
+          .sort((a, b) => b.totalScore - a.totalScore);
 
         // สร้างข้อมูลสำหรับ sheet
         const sheetData = [];
         
         // Header row 1
-        const header1 = ['อันดับ', 'ผลงาน/ทีม', 'คะแนนเฉลี่ย'];
+        const header1 = ['อันดับ', 'ผลงาน/ทีม', 'คะแนนรวม'];
         judges.forEach(judge => {
           header1.push(judge.name);
           cat.criteria.forEach(() => header1.push(''));
@@ -161,7 +161,7 @@
           const row = [
             idx + 1,
             result.entry.name,
-            result.avgScore.toFixed(2)
+            result.totalScore.toFixed(0)
           ];
 
           result.judgeScores.forEach(judgeScore => {
@@ -181,7 +181,7 @@
         const colWidths = [
           { wch: 8 },  // อันดับ
           { wch: 30 }, // ผลงาน
-          { wch: 12 }  // คะแนนเฉลี่ย
+          { wch: 12 }  // คะแนนรวม
         ];
         judges.forEach(() => {
           colWidths.push({ wch: 10 }); // รวม
@@ -480,14 +480,14 @@
         
         return categoryEntries.map(entry => {
           const entryScores = scores.filter(s => s.entryId === entry.id);
-          const avgScore = entryScores.length > 0
+          const totalScore = entryScores.length > 0
             ? entryScores.reduce((sum, s) => {
                 return sum + Object.values(s.scores).reduce((a, b) => a + (parseInt(b) || 0), 0);
-              }, 0) / entryScores.length
+              }, 0)
             : 0;
 
-          return { entry, avgScore, scoreCount: entryScores.length, details: entryScores };
-        }).sort((a, b) => b.avgScore - a.avgScore);
+          return { entry, totalScore, scoreCount: entryScores.length, details: entryScores };
+        }).sort((a, b) => b.totalScore - a.totalScore);
       };
 
       if (loading) {
@@ -1005,10 +1005,10 @@
                                 </div>
                                 <div className="text-left sm:text-right w-full sm:w-auto">
                                   <div className={`text-3xl sm:text-4xl font-bold ${idx < 3 ? 'text-white' : 'text-indigo-600'}`}>
-                                    {result.avgScore.toFixed(2)}
+                                    {result.totalScore.toFixed(0)}
                                   </div>
                                   <div className={`text-xs sm:text-sm ${idx < 3 ? 'text-white opacity-90' : 'text-gray-600'}`}>
-                                    คะแนนเฉลี่ย
+                                    คะแนนรวม
                                   </div>
                                 </div>
                               </div>
